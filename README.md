@@ -63,3 +63,14 @@ Pour une sauvegarde réelle, utilisez les exports PostgreSQL (`pg_dump`) et/ou l
 ## Test manuel conseillé
 
 Avec uniquement des données fictives : connectez-vous, créez un client, un appartement avec un tarif choisi par vous, puis un séjour confirmé. Essayez un deuxième séjour qui chevauche le premier : il doit être refusé. Essayez un séjour commençant le jour du départ : il doit être accepté. Annulez un séjour, vérifiez la baisse du compteur, déconnectez-vous puis reconnectez-vous pour constater la conservation des données.
+
+
+## Connexion Supabase sur Vercel
+
+Sur Vercel, le CRM utilise en priorité `POSTGRES_URL`, fourni et maintenu par l’intégration Supabase. `DATABASE_URL` reste le réglage principal en local et le secours si aucune intégration n’est configurée. Ne recopiez pas manuellement les secrets de l’intégration.
+
+Le certificat public Supabase Root 2021 CA est fourni dans `lib/certs/supabase-ca.crt`, depuis https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt (expiration : 26 avril 2031). La vérification du certificat et du nom de serveur reste active.
+
+`node scripts/check-db.mjs` vérifie la connexion et répète la création du schéma dans une transaction annulée, sans créer de compte ni conserver de données. Les tables du CRM ont RLS activé et ne sont pas accessibles aux rôles publics `anon` et `authenticated` : les droits métier sont contrôlés par le serveur. Les erreurs d’installation journalisent uniquement un code technique, jamais les secrets.
+
+Après un déploiement, rechargez la page avant de soumettre un formulaire resté ouvert sur l’ancienne version.
