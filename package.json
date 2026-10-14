@@ -1,0 +1,27 @@
+{
+  "name": "fabi-crm",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build",
+    "start": "next start --hostname 127.0.0.1",
+    "test": "node --test tests/*.test.mjs",
+    "db:init": "node --env-file-if-exists=.env.local scripts/init-db.mjs",
+    "admin:create": "node --env-file-if-exists=.env.local scripts/create-admin.mjs",
+    "test:web": "npm run build && node --test tests/web.integration.mjs"
+  },
+  "dependencies": {
+    "next": "^16.0.0",
+    "pg": "^8.16.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.14",
+    "pglite-server": "^0.1.5"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

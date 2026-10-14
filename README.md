@@ -1,49 +1,65 @@
-# FABI CRM — Phase 1
+# FABI CRM — version web
 
-Application gratuite, locale, en français. Python / Flask / SQLite / Waitress.
-Aucun abonnement, API, Docker, domaine ou compte GitHub nécessaire à son utilisation.
+FABI s’utilise désormais dans un navigateur. La version Python/Windows a été remplacée par Next.js (JavaScript) et PostgreSQL. L’ancienne version reste récupérable dans l’historique Git ; ses données locales n’ont pas été supprimées. Aucune migration de SQLite n’a été effectuée.
 
-## Installation sur Windows
+## Comprendre les trois pièces
 
-1. Installez Python 3.12 ou 3.13 depuis python.org (gratuit), avec l'option « Add Python to PATH ». Internet est nécessaire uniquement pour télécharger Python et les dépendances.
-2. Copiez le dossier complet FABI-V1 sur votre ordinateur, dans un dossier privé de votre compte Windows (évitez les dossiers partagés).
-3. Ouvrez le dossier `scripts`, puis double-cliquez sur `setup_windows.bat`. Il installe les dépendances, initialise la base et lance les tests. Attendez le message « Installation terminee ».
-4. Double-cliquez sur `creer_admin.bat`. Choisissez votre identifiant, votre nom et un mot de passe personnel d'au moins 12 caractères. Le mot de passe ne s'affiche pas pendant la saisie. Aucun compte ou mot de passe par défaut n'est fourni.
-5. Double-cliquez sur `start_windows.bat`. Gardez la fenêtre ouverte et saisissez `http://127.0.0.1:8080` dans le navigateur **de cet ordinateur Windows**.
-6. Après chaque redémarrage de Windows, double-cliquez de nouveau sur `start_windows.bat`.
+- **GitHub** conserve le code et l’historique des modifications.
+- **Vercel** peut exécuter le site et fournir une adresse HTTPS.
+- **PostgreSQL** garde les comptes, clients, appartements et réservations. Une base externe est nécessaire : les fichiers locaux de Vercel ne sont pas un stockage durable.
 
-L'application exécutée dans l'environnement cloud n'est pas accessible à l'adresse locale de votre ordinateur : copiez d'abord le projet sur Windows. Les scripts Windows sont fournis, mais leur exécution doit encore être vérifiée sur Windows.
+Le code n’appelle aucune API payante ou service d’IA. Le coût et l’éligibilité de l’hébergement dépendent de ses conditions. Vérifiez les offres actuelles avant de choisir : l’offre Vercel Hobby est destinée à un usage personnel non commercial, elle ne doit pas être présentée comme un hébergement gratuit garanti pour l’activité commerciale de FABI. La première mise en ligne doit rester une démonstration avec données fictives. Aucun site n’est déployé automatiquement par ce dépôt.
 
-## Tester simplement
+## Mise en ligne de démonstration, pas à pas
 
-Connectez-vous avec votre compte. Consultez le tableau de bord puis « Équipe & accès ». Créez un employé avec un mot de passe individuel. Déconnectez-vous, connectez-vous avec cet employé : l'administration et le journal sont réservés à l'administrateur. Reconnectez-vous en administrateur pour désactiver cet employé et vérifier qu'il ne peut plus accéder au CRM.
+1. Créez votre compte Vercel et reliez-le à votre GitHub. Dans « Add New Project », importez `mohammettoure21-ai/FABI-V1`. Le framework est **Next.js**. Gardez les commandes proposées (`npm run build`).
+2. Créez une base PostgreSQL chez un fournisseur compatible, par exemple Neon, après vérification de ses conditions gratuites et de sa région d’hébergement. Copiez son URL de connexion **privée**, avec TLS activé, uniquement dans les paramètres sécurisés Vercel.
+3. Dans « Settings → Environment Variables » du projet Vercel, ajoutez `DATABASE_URL` avec cette URL. Ne publiez jamais cette valeur dans GitHub ou dans un message. Les connexions utilisent le certificat du fournisseur ; le code ne désactive pas sa vérification.
+4. Ajoutez aussi `FABI_SETUP_TOKEN` : un code secret aléatoire d’au moins 32 caractères. Ce code est uniquement destiné à la première installation. Vous pouvez générer une valeur dans un gestionnaire de mots de passe.
+5. Déployez (ou redéployez après avoir ajouté les variables). Ouvrez l’adresse HTTPS donnée par Vercel, suivie de `/installation`.
+6. Saisissez votre code d’installation, votre nom, votre e-mail et un mot de passe personnel d’au moins 12 caractères. Le site crée les tables et votre compte administrateur. Cette opération n’efface pas les données et ne peut pas recréer un premier compte quand un compte existe déjà.
+7. Retirez `FABI_SETUP_TOKEN` des paramètres Vercel et redéployez. Ouvrez `/connexion` et connectez-vous. Vous pouvez maintenant ajouter des contacts, des appartements et des séjours fictifs.
 
-Tests techniques : `.venv\Scripts\python -m pytest -q` depuis le dossier principal.
-Sous Linux : `python -m venv .venv`, `.venv/bin/pip install -r requirements.txt`, `.venv/bin/python -m flask --app fabi init-db`, `.venv/bin/python -m flask --app fabi create-admin`, puis `.venv/bin/python run.py`.
+Si `/connexion` indique que la base n’est pas configurée : vérifiez `DATABASE_URL`, l’environnement Vercel sélectionné et redéployez. Si la connexion échoue avant installation, commencez par `/installation`. Ne partagez pas le code d’installation ou le mot de passe de la base.
 
-## Données et sécurité
+Les données sont hébergées chez votre fournisseur PostgreSQL, pas sur votre PC. Avant d’importer des clients réels, validez les règles de confidentialité, les sauvegardes et l’hébergement retenu. Aucun document financier original n’a été importé.
 
-La base est `instance/fabi.sqlite`. La clé des sessions est créée dans `instance/secret.key` et reste persistante. Ne partagez pas ces fichiers. Restreignez l'accès au dossier avec les permissions Windows, verrouillez votre session et activez le chiffrement du disque si disponible. Les mots de passe sont hachés ; la base entière n'est pas chiffrée par l'application.
+## Ce qui fonctionne dans cette version
 
-Protection CSRF, contrôle des rôles côté serveur, cookies HttpOnly / SameSite, expiration après 30 minutes, journal d'activité et limitation à 5 échecs par identifiant ou adresse sur 15 minutes. Aucun service externe ne reçoit les données. Les droits financiers et l'affectation des réservations seront ajoutés avec leurs modules.
+- Connexion et déconnexion, sessions expirant après 30 minutes, mots de passe salés/hachés, limitation à cinq échecs par e-mail sur quinze minutes.
+- Rôles administrateur, responsable et employé côté serveur. Les employés ne lisent que leurs contacts et réservations. Ils peuvent lire le parc immobilier, créer des contacts et séjours affectés à eux-mêmes ; ils ne peuvent pas créer des biens. Les montants des listes sont réservés aux responsables et administrateurs ; le prix convenu est demandé pour saisir une réservation.
+- Tableau de bord avec nombres réels de clients, prospects, biens, séjours confirmés à venir/en cours, arrivées et départs du jour, calculés à Dakar.
+- Création de contacts, recherche, étapes commerciales, notes et détection de doublons par téléphone exact ou e-mail insensible à la casse.
+- Création d’appartements : référence, nom, quartier, catégorie, chambres, tarif XOF entier, état.
+- Création et annulation de réservations : client, bien, dates, voyageurs, prix convenu, source et statut. Montant calculé depuis le nombre de nuits ; ce montant n’est pas une recette encaissée.
+- Interdiction des chevauchements confirmés directement dans PostgreSQL, y compris lors de demandes concurrentes. Départ et arrivée le même jour autorisés.
+- Journal des créations, connexions et annulations conservé dans la base.
 
-## Sauvegarde et restauration
+## Ce qui reste à développer
 
-Exécutez `.venv\Scripts\python scripts\backup.py`. Une sauvegarde datée, vérifiée et sans écrasement apparaît dans `backups`. Copiez-la régulièrement sur un support privé protégé. La sauvegarde contient les comptes et leurs mots de passe hachés : elle est confidentielle.
+Modification des contacts/biens/séjours, réaffectation, réinitialisation des mots de passe, calendrier graphique, normalisation des téléphones, pagination complète, champs avancés (propriétaires, équipements, WhatsApp…), interface du journal, finances, commissions, factures/PDF, paiements, imports CSV/XLSX, exports et sauvegardes automatisées. Les listes sont limitées à 200 entrées ; ce n’est pas une version métier complète.
 
-Pour restaurer : arrêtez le serveur (Ctrl+C), faites une nouvelle sauvegarde, conservez l'ancienne base dans un autre dossier privé, puis copiez la sauvegarde choisie dans `instance` et nommez-la `fabi.sqlite`. Conservez `secret.key` ou supprimez-la pour générer une nouvelle clé et invalider toutes les sessions au prochain démarrage. Redémarrez et vérifiez les comptes et le journal. Ne restaurez jamais pendant que le serveur tourne. Testez cette procédure sur une copie du dossier avant toute utilisation réelle.
+L’administrateur peut créer et désactiver les comptes dans « Équipe & accès ». La désactivation révoque les sessions. Aucune donnée ou identité de propriétaire n’est inventée. Seuls les tests utilisent des exemples fictifs.
 
-## Accès des employés : pas encore activé
+## Développement et vérification
 
-Cette phase écoute uniquement sur 127.0.0.1 : aucun autre ordinateur ne peut y accéder. N'ouvrez aucun port sur votre routeur et ne configurez jamais de redirection publique.
+Node.js 22 ou supérieur, sans Python et sans Docker.
 
-HTTP sur un réseau local permet l'interception des mots de passe et des données. Avant des données réelles et l'accès réseau, la phase 5 devra configurer HTTPS avec un certificat approuvé sur chaque poste, un proxy local gratuit, des cookies Secure et une règle du pare-feu limitée au réseau privé. Ne changez pas simplement l'adresse d'écoute pour activer le réseau. Le réseau local de confiance ne remplace pas le chiffrement.
+```sh
+npm ci
+npm test
+npm run build
+npm run test:web
+```
 
-## Périmètre livré
+Pour démarrer localement : copiez `.env.example` vers `.env.local`, fournissez votre connexion PostgreSQL et votre code d’installation privé, puis `npm run dev`. Ouvrez `http://127.0.0.1:3000/installation` sur la même machine. En production, `npm run build` puis `npm start` ; ce serveur local écoute uniquement sur localhost. Vercel gère son propre démarrage HTTPS.
 
-Phase 1 : connexion/déconnexion, comptes administrateur/responsable/employé, création et désactivation de comptes par l'administrateur, journal, navigation responsive, base persistante, procédure de sauvegarde et tests.
-Le tableau de bord présente des emplacements clairement marqués « À venir », sans données commerciales inventées.
+Autre initialisation en console : `npm run db:init`, puis `npm run admin:create` (mot de passe masqué). Les scripts utilisent `.env.local`. L’initialisation conserve les données. Les tests exécutent un moteur PostgreSQL embarqué PGlite avec l’extension btree_gist, isolé et sans secret externe. `npm run test:web` compile puis lance un vrai serveur Next.js et vérifie les formulaires par HTTP : première installation, connexion, création de compte et de données, doublons, chevauchements, annulation et restriction des accès employés. Le serveur PostgreSQL de test est limité à localhost et n’est jamais utilisé en production.
 
-À réaliser : phase 2 (clients, pipeline, appartements, réservations et calendrier), phase 3 (finances en XOF entier, commissions et rapports), phase 4 (factures/PDF, WhatsApp et imports CSV/XLSX), phase 5 (HTTPS local, accès employés, tests de sécurité complets et validation Windows). Les filtres et indicateurs réels arriveront avec ces modules. Aucun document financier original n'a été utilisé ou modifié.
+Next.js contrôle l’origine des Server Actions, les mutations utilisent POST, les sessions sont opaques et stockées sous forme de hash en base, les cookies sont HttpOnly/SameSite et Secure en production. Les requêtes sont paramétrées. Ne désactivez pas TLS. La limitation par adresse IP, l’authentification multifacteur et une revue de sécurité complète restent à faire avant des données réelles.
 
-Aucun compte de démonstration permanent. Les tests utilisent uniquement des comptes fictifs dans une base temporaire. Ne considérez pas cette phase comme une application métier complète validée pour la production.
+Pour une sauvegarde réelle, utilisez les exports PostgreSQL (`pg_dump`) et/ou les sauvegardes du fournisseur ; vérifiez la restauration sur une base séparée. La sauvegarde SQLite de l’ancienne version ne couvre pas cette base. Un guide opérationnel validé et des sauvegardes automatiques restent à livrer.
+
+## Test manuel conseillé
+
+Avec uniquement des données fictives : connectez-vous, créez un client, un appartement avec un tarif choisi par vous, puis un séjour confirmé. Essayez un deuxième séjour qui chevauche le premier : il doit être refusé. Essayez un séjour commençant le jour du départ : il doit être accepté. Annulez un séjour, vérifiez la baisse du compteur, déconnectez-vous puis reconnectez-vous pour constater la conservation des données.

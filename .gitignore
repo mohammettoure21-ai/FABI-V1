@@ -1,7 +1,12 @@
+node_modules/
+.next/
+.env*
+!.env.example
+.vercel/
+coverage/
 .venv/
-.env
 instance/
-__pycache__/
-.pytest_cache/
-*.pyc
 backups/
+.pytest_cache/
+__pycache__/
+*.pyc
