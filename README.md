@@ -37,7 +37,7 @@ Les données sont hébergées chez votre fournisseur PostgreSQL, pas sur votre P
 
 ## Ce qui reste à développer
 
-Modification des contacts/biens/séjours, réaffectation, réinitialisation des mots de passe, calendrier graphique, normalisation des téléphones, pagination complète, champs avancés (propriétaires, équipements, WhatsApp…), interface du journal, finances, commissions, factures/PDF, paiements, imports CSV/XLSX, exports et sauvegardes automatisées. Les listes sont limitées à 200 entrées ; ce n’est pas une version métier complète.
+Modification des contacts/biens/séjours, réaffectation, réinitialisation des mots de passe, calendrier graphique, normalisation des téléphones, pagination complète, champs avancés (propriétaires, équipements, WhatsApp…), interface du journal, factures/PDF, paiements, imports CSV/XLSX en libre-service, exports et sauvegardes automatisées. Les listes sont limitées à 200 entrées ; ce n’est pas une version métier complète.
 
 L’administrateur peut créer et désactiver les comptes dans « Équipe & accès ». La désactivation révoque les sessions. Aucune donnée ou identité de propriétaire n’est inventée. Seuls les tests utilisent des exemples fictifs.
 
@@ -74,3 +74,11 @@ Le certificat public Supabase Root 2021 CA est fourni dans `lib/certs/supabase-c
 `node scripts/check-db.mjs` vérifie la connexion et répète la création du schéma dans une transaction annulée, sans créer de compte ni conserver de données. Les tables du CRM ont RLS activé et ne sont pas accessibles aux rôles publics `anon` et `authenticated` : les droits métier sont contrôlés par le serveur. Les erreurs d’installation journalisent uniquement un code technique, jamais les secrets.
 
 Après un déploiement, rechargez la page avant de soumettre un formulaire resté ouvert sur l’ancienne version.
+
+## Finances et import FABI
+
+La page `/finances` est réservée aux administrateurs et responsables. Les écritures sont séparées en recettes, dépenses hors loyers, commissions de FABI Conciergerie et loyers. Le solde d’exploitation correspond uniquement aux recettes moins les dépenses hors loyers. Les loyers mensuels contractuels sont conservés dans `property_monthly_rents` : ils ne créent pas de paiement ou de dépense.
+
+`lib/finance-schema.mjs` complète le schéma de façon additive. Les trois tables financières ont RLS activé et leurs droits publics sont révoqués. Un import conserve la source dans la base privée, avec une empreinte unique du fichier et une unicité par feuille/ligne/type pour éviter les doublons. Aucun document financier ni ses écritures ne doivent être ajoutés au dépôt GitHub public. Les données sont importées via une connexion administrateur autorisée, sans route publique d’import.
+
+Les biens importés dont les chambres et le tarif sont inconnus gardent des valeurs NULL et restent inactifs jusqu’à complétion. Les dates originales, les mois du bilan, les commentaires et les incohérences sont conservés. Les totaux et synthèses du classeur ne sont pas transformés en recettes ou dépenses supplémentaires.

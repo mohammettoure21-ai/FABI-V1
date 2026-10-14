@@ -28,6 +28,13 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(await submit('/clients','name',{name:'Doublon',phone:'+221000000000',email:'',status:'Nouveau'}),/erreur=/);
   await submit('/appartements','reference',{reference:'FICTIF',name:'Appartement fictif',neighborhood:'Quartier fictif',category:'F2',bedrooms:'1',nightly:'10000',status:'Disponible'});
   assert.match(await (await get('/appartements')).text(),/Appartement fictif/);
+  await db.exec("INSERT INTO finance_imports(fingerprint,filename,reporting_year,source_data,notes) VALUES('fake','fictif.xlsx',2026,'{}','[\"Contrôle fictif\"]'); INSERT INTO finance_entries(import_id,property_id,kind,reporting_year,reporting_month,description,amount,source_sheet,source_row) VALUES(1,1,'recette',2026,5,'Recette fictive',1000,'Test',1),(1,1,'loyer',2026,5,'Loyer fictif',300,'Test',2)");
+  assert.match(await (await get('/finances')).text(),/Recette fictive/);
+  assert.doesNotMatch(await (await get('/finances?mois=6')).text(),/Recette fictive/);
+  assert.match(await submit('/finances','property_id',{property_id:'1',amount:'250'}),/succes=/);
+  assert.equal(Number((await db.query('SELECT amount FROM property_monthly_rents WHERE property_id=1')).rows[0].amount),250);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM finance_entries')).rows[0].n,2);
+
   const booking={client_id:'1',property_id:'1',arrival:'2026-12-10',departure:'2026-12-12',guests:'2',nightly:'10000',status:'Confirmée',source:'Direct'};
   assert.match(await submit('/reservations','client_id',booking),/succes=/);
   assert.match(await submit('/reservations','client_id',{...booking,arrival:'2026-12-11',departure:'2026-12-13'}),/erreur=/);
@@ -36,6 +43,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.equal((await db.query('SELECT status FROM reservations WHERE id=1')).rows[0].status,'Annulée');
   cookie='';await submit('/connexion','email',{email:'employee@example.test',password:'UnMotDePasseFictif123!'});
   assert.equal((await get('/equipe')).status,307);
+  assert.equal((await get('/finances')).status,307);
   assert.doesNotMatch(await (await get('/clients')).text(),/Client fictif/);
   assert.doesNotMatch(await (await get('/reservations')).text(),/Client fictif/);
   assert.doesNotMatch(await (await get('/appartements')).text(),/name="reference"/);
