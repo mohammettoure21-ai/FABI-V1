@@ -82,3 +82,11 @@ La page `/finances` est réservée aux administrateurs et responsables. Les écr
 `lib/finance-schema.mjs` complète le schéma de façon additive. Les trois tables financières ont RLS activé et leurs droits publics sont révoqués. Un import conserve la source dans la base privée, avec une empreinte unique du fichier et une unicité par feuille/ligne/type pour éviter les doublons. Aucun document financier ni ses écritures ne doivent être ajoutés au dépôt GitHub public. Les données sont importées via une connexion administrateur autorisée, sans route publique d’import.
 
 Les biens importés dont les chambres et le tarif sont inconnus gardent des valeurs NULL et restent inactifs jusqu’à complétion. Les dates originales, les mois du bilan, les commentaires et les incohérences sont conservés. Les totaux et synthèses du classeur ne sont pas transformés en recettes ou dépenses supplémentaires.
+
+## Réservations et opérations quotidiennes
+
+Une réservation peut être créée sans fiche client ni appartement : nom libre, agent, source Airbnb/Booking/Agent et appartement libre sont facultatifs. Aucun faux contact n’est créé. Les dates, voyageurs et prix restent contrôlés. La contrainte de chevauchement s’applique aux appartements liés ; un séjour sans bien ne bloque pas le calendrier.
+
+Dans Finances & loyers, les onglets Commissions FABI, Dépenses et Ménage permettent la saisie par activité avec appartement facultatif. Chaque passage de ménage vaut 5 000 FCFA et crée une seule dépense. Le récapitulatif groupe les passages par mois, appartement et ménagère. Marquer payé met à jour le statut sans créer de nouvelle dépense. Le résultat global compte les dépenses dues ; il ne représente pas la trésorerie encaissée. Les agrégats historiques « ménage et achats » ne sont pas transformés en passages.
+
+Le build exécute `scripts/migrate-db.mjs` avant compilation : la migration additive et idempotente utilise la même connexion que le déploiement, sans document financier dans le dépôt. Sans configuration de base, le build local ignore cette étape.

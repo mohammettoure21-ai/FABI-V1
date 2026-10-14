@@ -1,3 +1,4 @@
+import {randomUUID} from 'node:crypto';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -31,7 +32,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   await db.exec("INSERT INTO finance_imports(fingerprint,filename,reporting_year,source_data,notes) VALUES('fake','fictif.xlsx',2026,'{}','[\"Contrôle fictif\"]'); INSERT INTO finance_entries(import_id,property_id,kind,reporting_year,reporting_month,description,amount,source_sheet,source_row) VALUES(1,1,'recette',2026,5,'Recette fictive',1000,'Test',1),(1,1,'loyer',2026,5,'Loyer fictif',300,'Test',2)");
   assert.match(await (await get('/finances')).text(),/Recette fictive/);
   assert.doesNotMatch(await (await get('/finances?mois=6')).text(),/Recette fictive/);
-  assert.match(await submit('/finances','property_id',{property_id:'1',amount:'250'}),/succes=/);
+  assert.match(await submit('/finances','monthly_rent',{property_id:'1',amount:'250'}),/succes=/);
   assert.equal(Number((await db.query('SELECT amount FROM property_monthly_rents WHERE property_id=1')).rows[0].amount),250);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM finance_entries')).rows[0].n,2);
 
@@ -41,6 +42,23 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(await submit('/reservations','client_id',{...booking,arrival:'2026-12-12',departure:'2026-12-14'}),/succes=/);
   await submit('/reservations','id',{id:'1'});
   assert.equal((await db.query('SELECT status FROM reservations WHERE id=1')).rows[0].status,'Annulée');
+  assert.match(await submit('/reservations','client_id',{...booking,client_id:'',property_id:'',source:'Agent',guest_label:'Inconnu',agent_name:'Agent fictif',property_label:'À préciser'}),/succes=/);
+  assert.match(await (await get('/reservations')).text(),/Agent fictif/);
+  const cleaningKey=randomUUID();
+  const cleaning={kind:'depense',cleaning:'1',date:'2026-05-11',property_id:'1',provider:'Ménagère fictive',quantity:'1',request_key:cleaningKey};
+  assert.match(await submit('/finances?onglet=menage','request_key',cleaning),/succes=/);
+  assert.match(await submit('/finances?onglet=menage','request_key',cleaning),/succes=/);
+  assert.equal((await db.query("SELECT count(*)::int AS n FROM finance_entries WHERE activity='Ménage'")).rows[0].n,1);
+  assert.equal(Number((await db.query("SELECT amount FROM finance_entries WHERE activity='Ménage'")).rows[0].amount),5000);
+  assert.match(await (await get('/finances?onglet=menage')).text(),/Ménagère fictive/);
+  const cleaningId=(await db.query("SELECT id FROM finance_entries WHERE activity='Ménage'")).rows[0].id;
+  await submit('/finances?onglet=menage','entry_id',{entry_id:String(cleaningId)});
+  assert.equal((await db.query('SELECT payment_status FROM finance_entries WHERE id=$1',[cleaningId])).rows[0].payment_status,'Payé');
+  const commission={kind:'commission',activity:'Chauffeur',date:'2026-05-12',property_id:'',description:'Transfert fictif',amount:'8000',provider:'Chauffeur fictif',request_key:randomUUID()};
+  assert.match(await submit('/finances?onglet=commissions','request_key',commission),/succes=/);
+  assert.match(await (await get('/finances?onglet=commissions')).text(),/Chauffeur fictif/);
+  assert.match(await submit('/finances?onglet=depenses','request_key',{...commission,kind:'depense',activity:'Wifi',amount:'14900',request_key:randomUUID()}),/succes=/);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM finance_entries')).rows[0].n,5);
   cookie='';await submit('/connexion','email',{email:'employee@example.test',password:'UnMotDePasseFictif123!'});
   assert.equal((await get('/equipe')).status,307);
   assert.equal((await get('/finances')).status,307);
@@ -48,7 +66,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.doesNotMatch(await (await get('/reservations')).text(),/Client fictif/);
   assert.doesNotMatch(await (await get('/appartements')).text(),/name="reference"/);
   // Un employé ne doit pas pouvoir réutiliser une action de l’administrateur.
-  assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM reservations')).rows[0].n,2);
+  assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM reservations')).rows[0].n,3);
   assert.ok((await db.query('SELECT COUNT(*)::int AS n FROM audit')).rows[0].n>=5);
  }finally{server.kill();await new Promise(resolve=>server.once('exit',resolve));postgres.close();await db.close();}
 });

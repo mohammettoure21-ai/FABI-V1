@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {PGlite} from '@electric-sql/pglite';
 import {btree_gist} from '@electric-sql/pglite/contrib/btree_gist';
 import {schema} from '../lib/schema.mjs';
-import {summarize} from '../lib/finance.mjs';
+import {summarize,cleaningSummary} from '../lib/finance.mjs';
 
 test('Le bilan sépare loyers, dépenses et commissions ; importer une ligne deux fois est refusé',async()=>{
  const db=new PGlite({extensions:{btree_gist}});
@@ -20,4 +20,10 @@ test('Le bilan sépare loyers, dépenses et commissions ; importer une ligne deu
   const secured=await db.query("SELECT relname,relrowsecurity FROM pg_class WHERE relname IN ('finance_imports','finance_entries','property_monthly_rents')");
   assert.equal(secured.rows.length,3);assert.ok(secured.rows.every(r=>r.relrowsecurity));
  }finally{await db.close();}
+});
+
+test('Ménage : total mensuel et reste à payer sans double déduction',()=>{
+ const base={kind:'depense',activity:'Ménage',property_id:1,property_name:'Test',provider:'Ménagère fictive',reporting_year:2026,reporting_month:5,quantity:1,amount:5000};
+ const rows=cleaningSummary([{...base,payment_status:'À payer'},{...base,payment_status:'Payé'},{...base,reporting_month:6,payment_status:'À payer'}]);
+ assert.equal(rows.length,2);assert.equal(rows[0].visits,2);assert.equal(rows[0].total,10000);assert.equal(rows[0].due,5000);
 });
