@@ -69,7 +69,7 @@ Avec uniquement des données fictives : connectez-vous, créez un client, un app
 
 Sur Vercel, le CRM utilise en priorité `POSTGRES_URL`, fourni et maintenu par l’intégration Supabase. `DATABASE_URL` reste le réglage principal en local et le secours si aucune intégration n’est configurée. Ne recopiez pas manuellement les secrets de l’intégration.
 
-Le certificat public Supabase Root 2021 CA est fourni dans `lib/certs/supabase-ca.crt`, depuis https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt (expiration : 26 avril 2031). La vérification du certificat et du nom de serveur reste active.
+Le certificat public Supabase Root 2021 CA est fourni dans `lib/certs/supabase-ca.mjs`, depuis https://supabase-downloads.s3-ap-southeast-1.amazonaws.com/prod/ssl/prod-ca-2021.crt (expiration : 26 avril 2031). La vérification du certificat et du nom de serveur reste active.
 
 `node scripts/check-db.mjs` vérifie la connexion et répète la création du schéma dans une transaction annulée, sans créer de compte ni conserver de données. Les tables du CRM ont RLS activé et ne sont pas accessibles aux rôles publics `anon` et `authenticated` : les droits métier sont contrôlés par le serveur. Les erreurs d’installation journalisent uniquement un code technique, jamais les secrets.
 
