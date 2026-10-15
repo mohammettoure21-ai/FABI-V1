@@ -90,3 +90,11 @@ Une réservation peut être créée sans fiche client ni appartement : nom libre
 Dans Finances & loyers, les onglets Commissions FABI, Dépenses et Ménage permettent la saisie par activité avec appartement facultatif. Chaque passage de ménage vaut 5 000 FCFA et crée une seule dépense. Le récapitulatif groupe les passages par mois, appartement et ménagère. Marquer payé met à jour le statut sans créer de nouvelle dépense. Le résultat global compte les dépenses dues ; il ne représente pas la trésorerie encaissée. Les agrégats historiques « ménage et achats » ne sont pas transformés en passages.
 
 Le build exécute `scripts/migrate-db.mjs` avant compilation : la migration additive et idempotente utilise la même connexion que le déploiement, sans document financier dans le dépôt. Sans configuration de base, le build local ignore cette étape.
+
+## Tableau de bord et parc FABI
+
+Le tableau de bord affiche les appartements disponibles, les séjours confirmés et les mouvements du jour. Les responsables voient un histogramme interactif des commissions FABI par mois et activité, filtrable par année. Les recettes locatives ne sont pas ajoutées aux commissions. Les employés ne reçoivent pas les données financières du graphique.
+
+La correction ponctuelle du parc du 15 octobre 2026 fusionne les fiches OCÉAN, conserve leurs réservations, écritures et loyers et conserve un état antérieur dans le journal. Les deux appartements deviennent des F2 disponibles à 40 000 FCFA par nuit : OCÉAN à Cité Biagui et ÉCRIN aux Mamelles. Les prix des séjours déjà enregistrés restent inchangés. Une trace dans `app_migrations` évite de réappliquer cette correction lors des déploiements suivants. Si des réservations confirmées se chevauchent ou si des loyers contractuels se contredisent entre doublons, la transaction est annulée pour préserver les données.
+
+Les boutons FABI / OCÉAN / ÉCRIN du tableau de bord changent l’histogramme et les indicateurs. Les vues appartement lisent les recettes, dépenses et loyers déjà présents dans `finance_entries`, reliés au bien ; aucune nouvelle écriture ni copie de montants n’est créée. FABI regroupe les commissions, et déduit pour son résultat les charges sans appartement. Les résultats incluent les charges à payer et ne constituent pas un solde de trésorerie.
