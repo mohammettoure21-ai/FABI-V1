@@ -61,7 +61,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(await submit('/reservations','client_id',{...booking,client_id:'',property_id:'',source:'Agent',guest_label:'Inconnu',agent_name:'Agent fictif',property_label:'À préciser'}),/succes=/);
   const reservationPage=await (await get('/reservations')).text();
   assert.match(reservationPage,/Agent fictif/);
-  assert.ok(reservationPage.indexOf('Vos réservations')<reservationPage.indexOf('<h2>Ajouter une réservation'));
+  assert.ok(reservationPage.indexOf('Vos réservations')<reservationPage.indexOf('<h2>Nouvelle réservation'));
   assert.match(reservationPage,/Calendriers Airbnb/);
   assert.ok(reservationPage.indexOf('Calendrier des réservations')<reservationPage.indexOf('Vos réservations'));
   assert.match(reservationPage,/stay-bar/);
