@@ -20,13 +20,15 @@ export async function updateStay(form) {
    const status=stay.calendar_active?(stay.calendar_conflict&&changedDates?'Confirmée':stay.status):text(form.get('edit_status'),30);
    if(!['Confirmée','En attente','Annulée'].includes(status))throw new Error('INVALID');
    const override=Boolean(stay.calendar_connection_id)&&(values.arrival!==stay.calendar_arrival||values.departure!==stay.calendar_departure);
-   if(stay.calendar_event_kind==='blocked'){values.nightly=null;values.total=null;values.commission=null;}
+   const convert=stay.calendar_event_kind==='blocked'&&form.get('confirm_reservation')==='1';
+   if(stay.calendar_event_kind==='blocked'&&!convert&&(values.nightly!==null||values.total!==null))throw new Error('CONFIRM_RESERVATION');
+   if(stay.calendar_event_kind==='blocked'&&!convert){values.nightly=null;values.total=null;values.commission=null;}
    const commission=user.role==='employee'?stay.expected_commission:values.commission;
    await db.query(`UPDATE reservations SET arrival=$2,departure=$3,nightly=$4,agreed_total=$5,expected_commission=$6,property_id=$7,status=$8,
-    local_dates_override=$9,calendar_conflict=CASE WHEN $9 THEN FALSE ELSE calendar_conflict END WHERE id=$1`,[id,values.arrival,values.departure,values.nightly,values.total,commission,propertyId,status,override]);
+    local_reservation_override=local_reservation_override OR $10,calendar_event_kind=CASE WHEN $10 THEN 'reservation' ELSE calendar_event_kind END,local_dates_override=$9,calendar_conflict=CASE WHEN $9 THEN FALSE ELSE calendar_conflict END WHERE id=$1`,[id,values.arrival,values.departure,values.nightly,values.total,commission,propertyId,status,override,convert]);
    await db.query('INSERT INTO audit(user_id,action) VALUES($1,$2)',[user.id,'Modification séjour '+id+' : dates et prix']);
   });
- }catch(error){fail(id,error.code==='23P01'?'Ces dates chevauchent un séjour confirmé. Aucune modification conservée.':'Modification impossible. Vérifiez le séjour et l’appartement.');}
+ }catch(error){fail(id,error.message==='CONFIRM_RESERVATION'?'Cochez « Ce blocage correspond à un séjour » pour ajouter son prix.':error.code==='23P01'?'Ces dates chevauchent un séjour confirmé. Aucune modification conservée.':'Modification impossible. Vérifiez le séjour et l’appartement.');}
  revalidatePath('/');revalidatePath('/reservations');
  redirect('/reservations?cal_annee='+values.arrival.slice(0,4)+'&cal_mois='+Number(values.arrival.slice(5,7))+(savedPropertyId?'&cal_bien='+savedPropertyId:'')+'&succes=Séjour+modifié.+Le+prévisionnel+est+mis+à+jour.');
 }

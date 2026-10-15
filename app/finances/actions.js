@@ -1,4 +1,6 @@
 'use server';
+import {revalidatePath} from 'next/cache';
+import {reviewStayPayment} from '../../lib/stay-payment.mjs';
 import {redirect} from 'next/navigation';
 import {requireManager} from '../../lib/auth';
 import {transaction} from '../../lib/db.mjs';
@@ -67,4 +69,15 @@ export async function saveMonthlyRent(form) {
   });
  }catch{redirect('/finances?erreur=Enregistrement+impossible');}
  redirect('/finances?succes=Loyer+mensuel+enregistré');
+}
+
+export async function confirmStayPayment(form) {
+ const user=await requireManager();
+ let id,received;
+ try{id=integer(form.get('payment_stay_id'),1);if(!['yes','no'].includes(form.get('received')))throw new Error();received=form.get('received')==='yes';}
+ catch{redirect('/finances?erreur=Séjour+ou+réponse+invalide');}
+ try{await transaction(db=>reviewStayPayment(db,id,received,user.id));}
+ catch(error){redirect('/finances?erreur='+encodeURIComponent(error.message==='MISSING_PRICE'?'Ajoutez d’abord le prix du séjour.':'Ce séjour ne peut pas être encaissé.'));}
+ revalidatePath('/');revalidatePath('/finances');revalidatePath('/reservations');
+ redirect('/finances?succes='+encodeURIComponent(received?'Encaissement enregistré une seule fois.':'Paiement noté non reçu. Vous pourrez le confirmer plus tard.'));
 }

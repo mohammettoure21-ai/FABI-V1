@@ -23,7 +23,7 @@ export default async function Dashboard({searchParams}) {
    (SELECT count(*)::int FROM reservations WHERE status='Confirmée' AND calendar_event_kind='reservation' AND departure=(NOW() AT TIME ZONE 'Africa/Dakar')::date AND ($1<>'employee' OR assigned_to=$2) AND ($3::int IS NULL OR property_id=$3)) AS departures`,[user.role,user.id,requestedId]),
   query("SELECT id,name,category,neighborhood,nightly FROM properties WHERE status='Disponible' ORDER BY name"),
   manager?query("SELECT reporting_month AS month,property_id,kind,activity,count(*)::int AS count,sum(amount)::text AS total FROM finance_entries WHERE reporting_year=$1 GROUP BY reporting_month,property_id,kind,activity ORDER BY reporting_month,activity",[year]):Promise.resolve({rows:[]}),
-  manager?query("SELECT property_id,arrival,departure,nightly,agreed_total,expected_commission,status,calendar_event_kind FROM reservations WHERE status='Confirmée' AND calendar_event_kind='reservation' AND departure>$1::date AND arrival<$2::date",[Math.max(year,currentYear)+'-01-01',`${year+1}-01-01`]):Promise.resolve({rows:[]})
+  manager?query("SELECT property_id,arrival,departure,nightly,agreed_total,expected_commission,status,calendar_event_kind,payment_received_at FROM reservations WHERE status='Confirmée' AND calendar_event_kind='reservation' AND departure>$1::date AND arrival<$2::date",[Math.max(year,currentYear)+'-01-01',`${year+1}-01-01`]):Promise.resolve({rows:[]})
  ]);
  const stats=statsResult.rows[0];
  const selectedProperty=propertyResult.rows.find(p=>p.id===requestedId);

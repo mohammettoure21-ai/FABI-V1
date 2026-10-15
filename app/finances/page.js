@@ -6,7 +6,7 @@ import {query} from '../../lib/db.mjs';
 import {money} from '../../lib/security.mjs';
 import {months,kinds,activities,summarize,cleaningSummary} from '../../lib/finance.mjs';
 import {Header,Messages,Input,Empty} from '../components';
-import {saveMonthlyRent,saveFinanceEntry,markExpensePaid} from './actions';
+import {saveMonthlyRent,saveFinanceEntry,markExpensePaid,confirmStayPayment} from './actions';
 
 function PropertySelect({properties,defaultPropertyId}) {
  return <label>Appartement (facultatif)<select name="property_id" defaultValue={defaultPropertyId??''}><option value="">Sans appartement / FABI</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>;
@@ -42,10 +42,11 @@ export default async function Finances({searchParams}) {
  const year=/^\d{4}$/.test(params.annee??'')?Number(params.annee):new Date().getUTCFullYear();
  const month=/^(?:[1-9]|1[0-2])$/.test(params.mois??'')?Number(params.mois):null;
  const tab=['commissions','depenses','menage'].includes(params.onglet)?params.onglet:'bilan';
- const [result,propertyResult,importResult]=await Promise.all([
+ const [result,propertyResult,importResult,payments]=await Promise.all([
   query('SELECT e.*,p.name AS property_name FROM finance_entries e LEFT JOIN properties p ON p.id=e.property_id WHERE e.reporting_year=$1 AND ($2::int IS NULL OR e.reporting_month=$2) ORDER BY e.reporting_month DESC,e.original_date DESC,e.id DESC',[year,month]),
   query('SELECT p.id,p.name,r.amount FROM properties p LEFT JOIN property_monthly_rents r ON r.property_id=p.id ORDER BY p.name'),
-  query('SELECT filename,notes FROM finance_imports WHERE reporting_year=$1 ORDER BY imported_at DESC',[year])
+  query('SELECT filename,notes FROM finance_imports WHERE reporting_year=$1 ORDER BY imported_at DESC',[year]),
+  query(`SELECT r.id,r.property_id,r.arrival,r.departure,r.payment_reviewed_at,p.name AS property,COALESCE(NULLIF(c.name,''),NULLIF(r.guest_label,''),'Voyageur') AS guest,COALESCE(r.agreed_total,(r.departure-r.arrival)::bigint*r.nightly) AS amount FROM reservations r LEFT JOIN properties p ON p.id=r.property_id LEFT JOIN clients c ON c.id=r.client_id WHERE r.status='Confirmée' AND r.calendar_event_kind='reservation' AND r.arrival<$1::date AND r.payment_received_at IS NULL ORDER BY r.arrival DESC LIMIT 200`,[new Date().toISOString().slice(0,10)])
  ]);
  const properties=propertyResult.rows;
  const requestedProperty=Number(params.bien);
@@ -74,6 +75,7 @@ export default async function Finances({searchParams}) {
   {tab==='commissions'&&<><section className="panel"><h2>Origine des commissions FABI</h2><div className="table-scroll"><table><thead><tr><th>Activité</th><th>Nombre</th><th>Commissions</th></tr></thead><tbody>{activities.map(activity=>{const rows=entries.filter(e=>e.kind==='commission'&&e.activity===activity);return rows.length?<tr key={activity}><td>{activity}</td><td>{rows.length}</td><td>{money(rows.reduce((sum,e)=>sum+Number(e.amount),0))}</td></tr>:null;})}</tbody></table></div></section><section className="panel"><h2>Ajouter une commission</h2><p>Choisissez Chauffeur, Appartement ou une autre activité. Le nom, l’appartement et l’agent sont facultatifs.</p><EntryForm kind="commission" properties={properties} today={today} defaultPropertyId={selectedProperty?.id}/></section></>}
   {tab==='depenses'&&<section className="panel"><h2>Ajouter une dépense</h2><p>Wifi, transport, employé ou autre charge : le montant est compté immédiatement dans les finances. Pour le ménage à 5 000 FCFA par passage, utilisez l’onglet Ménage.</p><EntryForm properties={properties} today={today} defaultPropertyId={selectedProperty?.id}/></section>}
   {tab==='menage'&&<><section className="panel"><h2>Noter un passage de ménage</h2><EntryForm properties={properties} cleaning today={today} defaultPropertyId={selectedProperty?.id}/></section><section className="panel"><h2>Ménage : récapitulatif mensuel</h2><p>Le total est déjà inclus dans les dépenses. « Reste à payer » diminue quand vous marquez les passages payés.</p>{cleaning.length?<div className="table-scroll"><table><thead><tr><th>Mois</th><th>Appartement</th><th>Ménagère</th><th>Passages</th><th>Total</th><th>Reste à payer</th></tr></thead><tbody>{cleaning.map((row,i)=><tr key={i}><td>{months[row.month-1]} {row.year}</td><td>{row.property}</td><td>{row.provider}</td><td>{row.visits}</td><td>{money(row.total)}</td><td>{money(row.due)}</td></tr>)}</tbody></table></div>:<Empty text="Ajoutez chaque passage pour calculer le montant du mois."/>}</section></>}
+  <section className="panel"><h2>Encaissements des séjours à confirmer</h2><p>Dès le lendemain de l’arrivée, confirmez si le montant du séjour a été reçu. « Oui » ajoute une recette à la date de confirmation ; « Non » le laisse en attente.</p>{payments.rows.filter(r=>!selectedProperty||r.property_id===selectedProperty.id).map(r=><article className="payment-review" key={r.id}><div><b>{r.property||'Appartement à préciser'} · {r.guest}</b><p>Arrivée le {new Date(r.arrival).toLocaleDateString('fr-FR',{timeZone:'UTC'})} · {r.amount==null?'Prix à renseigner':money(Number(r.amount))}</p>{r.payment_reviewed_at&&<small>Dernière réponse : non reçu</small>}</div>{r.amount!=null&&Number(r.amount)>0?<form action={confirmStayPayment}><input type="hidden" name="payment_stay_id" value={r.id}/><span>Montant reçu ?</span><button name="received" value="yes">Oui, reçu</button><button className="secondary" name="received" value="no">Non, pas encore</button></form>:<Link href={'/reservations?modifier='+r.id+'#modifier-sejour'}>Ajouter le prix du séjour</Link>}</article>)}{!payments.rows.length&&<p>Aucun encaissement en attente de confirmation.</p>}</section>
   <section className="panel"><h2>{tab==='commissions'?'Détail des commissions':tab==='menage'?'Passages enregistrés':tab==='depenses'?'Détail des dépenses':'Toutes les écritures'}</h2><Entries entries={selected}/></section>
  </>;
 }

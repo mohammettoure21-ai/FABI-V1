@@ -99,6 +99,15 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.equal((await db.query('SELECT local_dates_override FROM reservations WHERE id=$1',[importedId])).rows[0].local_dates_override,false);
   assert.equal(Number((await db.query('SELECT agreed_total FROM reservations WHERE id=$1',[importedId])).rows[0].agreed_total),80000);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM finance_entries')).rows[0].n,5);
+  await db.exec("UPDATE reservations SET calendar_event_kind='blocked' WHERE external_uid='fictif'");
+  assert.match(await (await get('/reservations?modifier='+importedId)).text(),/name="price"/);
+  assert.match(await submit('/reservations?modifier='+importedId,'stay_id',{stay_id:String(importedId),edit_arrival:'2027-01-10',edit_departure:'2027-01-12',price_mode:'total',price:'80000',confirm_reservation:'1'}),/succes=/);
+  assert.equal((await db.query('SELECT local_reservation_override FROM reservations WHERE id=$1',[importedId])).rows[0].local_reservation_override,true);
+  await db.query("UPDATE reservations SET arrival='2001-01-01',departure='2001-01-03' WHERE id=$1",[importedId]);
+  assert.match(await submit('/finances','payment_stay_id',{payment_stay_id:String(importedId),received:'no'}),/succes=/);
+  assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries WHERE reservation_id=$1',[importedId])).rows[0].n,0);
+  assert.match(await submit('/finances','payment_stay_id',{payment_stay_id:String(importedId),received:'yes'}),/succes=/);
+  assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries WHERE reservation_id=$1',[importedId])).rows[0].n,1);
   cookie='';await submit('/connexion','email',{email:'employee@example.test',password:'UnMotDePasseFictif123!'});
   assert.equal((await get('/equipe')).status,307);
   assert.equal((await get('/finances')).status,307);

@@ -50,6 +50,11 @@ test('Import : dédoublonnage, dates modifiées, annulations et conflits ; aucun
   await sync([event('a','20261103','20261106'),event('c','20261108','20261110','Not available')]);
   assert.equal((await db.query("SELECT status FROM reservations WHERE external_uid='b'")).rows[0].status,'Annulée');
   assert.equal((await db.query("SELECT calendar_event_kind FROM reservations WHERE external_uid='c'")).rows[0].calendar_event_kind,'blocked');
+  await db.exec("UPDATE reservations SET local_reservation_override=TRUE,calendar_event_kind='reservation',agreed_total=80000 WHERE external_uid='c'");
+  await sync([event('a','20261103','20261106'),event('c','20261108','20261110','Not available')]);
+  const converted=(await db.query("SELECT calendar_event_kind,agreed_total FROM reservations WHERE external_uid='c'")).rows[0];
+  assert.equal(converted.calendar_event_kind,'reservation');assert.equal(Number(converted.agreed_total),80000);
+  await db.exec("UPDATE reservations SET local_reservation_override=FALSE,calendar_event_kind='blocked',agreed_total=NULL WHERE external_uid='c'");
   // Advisory platform blocks never prevent manual bookings, in either sync order.
   await db.exec("INSERT INTO reservations(property_id,arrival,departure,guests,nightly,status,source,assigned_to) VALUES(1,'2026-11-08','2026-11-10',2,40000,'Confirmée','Direct',1)");
   assert.equal((await sync([event('a','20261103','20261106'),event('c','20261108','20261110','Not available')])).conflicts,0);
