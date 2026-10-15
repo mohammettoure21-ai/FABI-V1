@@ -50,6 +50,12 @@ test('Import : dédoublonnage, dates modifiées, annulations et conflits ; aucun
   await sync([event('a','20261103','20261106'),event('c','20261108','20261110','Not available')]);
   assert.equal((await db.query("SELECT status FROM reservations WHERE external_uid='b'")).rows[0].status,'Annulée');
   assert.equal((await db.query("SELECT calendar_event_kind FROM reservations WHERE external_uid='c'")).rows[0].calendar_event_kind,'blocked');
+  // Advisory platform blocks never prevent manual bookings, in either sync order.
+  await db.exec("INSERT INTO reservations(property_id,arrival,departure,guests,nightly,status,source,assigned_to) VALUES(1,'2026-11-08','2026-11-10',2,40000,'Confirmée','Direct',1)");
+  assert.equal((await sync([event('a','20261103','20261106'),event('c','20261108','20261110','Not available')])).conflicts,0);
+  assert.equal((await db.query("SELECT status FROM reservations WHERE external_uid='c'")).rows[0].status,'Confirmée');
+  await assert.rejects(db.exec("INSERT INTO reservations(property_id,arrival,departure,guests,nightly,status,source,assigned_to) VALUES(1,'2026-11-08','2026-11-09',2,40000,'Confirmée','Direct',1)"),error=>error.code==='23P01');
+  await db.exec("DELETE FROM reservations WHERE source='Direct' AND arrival='2026-11-08'");
   // Swapping dates within one source must not create conflicts against its own old snapshot.
   assert.equal((await sync([event('a','20261108','20261110'),event('c','20261103','20261106','Not available')])).conflicts,0);
   await sync([]);
