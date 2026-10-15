@@ -16,9 +16,9 @@ export default async function Dashboard({searchParams}) {
  const [statsResult,propertyResult,revenueResult]=await Promise.all([
   query(`SELECT
    (SELECT count(*)::int FROM properties WHERE status='Disponible') AS properties,
-   (SELECT count(*)::int FROM reservations WHERE status='Confirmée' AND departure>(NOW() AT TIME ZONE 'Africa/Dakar')::date AND ($1<>'employee' OR assigned_to=$2)) AS bookings,
-   (SELECT count(*)::int FROM reservations WHERE status='Confirmée' AND arrival=(NOW() AT TIME ZONE 'Africa/Dakar')::date AND ($1<>'employee' OR assigned_to=$2)) AS arrivals,
-   (SELECT count(*)::int FROM reservations WHERE status='Confirmée' AND departure=(NOW() AT TIME ZONE 'Africa/Dakar')::date AND ($1<>'employee' OR assigned_to=$2)) AS departures`,[user.role,user.id]),
+   (SELECT count(*)::int FROM reservations WHERE status='Confirmée' AND calendar_event_kind='reservation' AND departure>(NOW() AT TIME ZONE 'Africa/Dakar')::date AND ($1<>'employee' OR assigned_to=$2)) AS bookings,
+   (SELECT count(*)::int FROM reservations WHERE status='Confirmée' AND calendar_event_kind='reservation' AND arrival=(NOW() AT TIME ZONE 'Africa/Dakar')::date AND ($1<>'employee' OR assigned_to=$2)) AS arrivals,
+   (SELECT count(*)::int FROM reservations WHERE status='Confirmée' AND calendar_event_kind='reservation' AND departure=(NOW() AT TIME ZONE 'Africa/Dakar')::date AND ($1<>'employee' OR assigned_to=$2)) AS departures`,[user.role,user.id]),
   query("SELECT id,name,category,neighborhood,nightly FROM properties WHERE status='Disponible' ORDER BY name"),
   manager?query("SELECT reporting_month AS month,property_id,kind,activity,count(*)::int AS count,sum(amount)::text AS total FROM finance_entries WHERE reporting_year=$1 GROUP BY reporting_month,property_id,kind,activity ORDER BY reporting_month,activity",[year]):Promise.resolve({rows:[]})
  ]);

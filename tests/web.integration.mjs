@@ -10,7 +10,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
  const db=new PGlite({extensions:{btree_gist}});
  const postgres=createServer(db);await new Promise(resolve=>postgres.listen(0,'127.0.0.1',resolve));
  const port=postgres.address().port,origin='http://127.0.0.1:3012';
- const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3012'],{env:{...process.env,DATABASE_URL:`postgresql://test:test@127.0.0.1:${port}/test`,NEXT_TELEMETRY_DISABLED:'1',FABI_SETUP_TOKEN:'installation-fictive-32-caracteres-minimum'},stdio:['ignore','pipe','pipe']});
+ const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3012'],{env:{...process.env,DATABASE_URL:`postgresql://test:test@127.0.0.1:${port}/test`,NEXT_TELEMETRY_DISABLED:'1',FABI_SETUP_TOKEN:'installation-fictive-32-caracteres-minimum',CRON_SECRET:'cron-local-fictif-pour-les-tests'},stdio:['ignore','pipe','pipe']});
  let output='';server.stdout.on('data',d=>output+=d);server.stderr.on('data',d=>output+=d);
  let cookie='';
  async function get(path){return fetch(origin+path,{redirect:'manual',headers:{cookie}});}
@@ -28,9 +28,19 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(await (await get('/clients')).text(),/Client fictif/);
   assert.match(await submit('/clients','name',{name:'Doublon',phone:'+221000000000',email:'',status:'Nouveau'}),/erreur=/);
   await submit('/appartements','reference',{reference:'FICTIF',name:'Appartement fictif',neighborhood:'Quartier fictif',category:'F2',bedrooms:'1',nightly:'10000',status:'Disponible'});
-  assert.match(await (await get('/appartements')).text(),/Appartement fictif/);
+  const propertiesPage=await (await get('/appartements')).text();
+  assert.match(propertiesPage,/Appartement fictif/);
+  assert.ok(propertiesPage.indexOf('Les appartements')<propertiesPage.indexOf('Ajouter un appartement'));
+  assert.equal((await get('/api/calendars/sync')).status,401);
+  const cron=await fetch(origin+'/api/calendars/sync',{headers:{authorization:'Bearer cron-local-fictif-pour-les-tests'}});
+  assert.equal(cron.status,200);assert.deepEqual(await cron.json(),{synchronized:0,failed:0});
+  assert.match(await submit('/reservations','calendar_property_id',{calendar_property_id:'1',provider:'Airbnb',calendar_url:'https://127.0.0.1/calendar/ical/fake.ics'}),/erreur=/);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM calendar_connections')).rows[0].n,0);
   await db.exec("INSERT INTO finance_imports(fingerprint,filename,reporting_year,source_data,notes) VALUES('fake','fictif.xlsx',2026,'{}','[\"Contrôle fictif\"]'); INSERT INTO finance_entries(import_id,property_id,kind,reporting_year,reporting_month,description,amount,source_sheet,source_row) VALUES(1,1,'recette',2026,5,'Recette fictive',1000,'Test',1),(1,1,'loyer',2026,5,'Loyer fictif',300,'Test',2)");
   assert.match(await (await get('/finances')).text(),/Recette fictive/);
+  assert.doesNotMatch(await (await get('/finances')).text(),/Loyers enregistrés/);
+  assert.doesNotMatch(await (await get('/finances?bien=fabi')).text(),/Recette fictive/);
+  assert.match(await (await get('/finances?bien=1')).text(),/Recette fictive/);
   assert.doesNotMatch(await (await get('/finances?mois=6')).text(),/Recette fictive/);
   assert.match(await submit('/finances','monthly_rent',{property_id:'1',amount:'250'}),/succes=/);
   assert.equal(Number((await db.query('SELECT amount FROM property_monthly_rents WHERE property_id=1')).rows[0].amount),250);
@@ -43,7 +53,10 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   await submit('/reservations','id',{id:'1'});
   assert.equal((await db.query('SELECT status FROM reservations WHERE id=1')).rows[0].status,'Annulée');
   assert.match(await submit('/reservations','client_id',{...booking,client_id:'',property_id:'',source:'Agent',guest_label:'Inconnu',agent_name:'Agent fictif',property_label:'À préciser'}),/succes=/);
-  assert.match(await (await get('/reservations')).text(),/Agent fictif/);
+  const reservationPage=await (await get('/reservations')).text();
+  assert.match(reservationPage,/Agent fictif/);
+  assert.ok(reservationPage.indexOf('Vos réservations')<reservationPage.indexOf('<h2>Ajouter une réservation'));
+  assert.match(reservationPage,/Calendriers Airbnb/);
   const cleaningKey=randomUUID();
   const cleaning={kind:'depense',cleaning:'1',date:'2026-05-11',property_id:'1',provider:'Ménagère fictive',quantity:'1',request_key:cleaningKey};
   assert.match(await submit('/finances?onglet=menage','request_key',cleaning),/succes=/);
@@ -73,6 +86,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.doesNotMatch(await (await get('/clients')).text(),/Client fictif/);
   assert.doesNotMatch(await (await get('/reservations')).text(),/Client fictif/);
   assert.doesNotMatch(await (await get('/appartements')).text(),/name="reference"/);
+  assert.doesNotMatch(await (await get('/reservations')).text(),/name="calendar_url"/);
   // Un employé ne doit pas pouvoir réutiliser une action de l’administrateur.
   assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM reservations')).rows[0].n,3);
   assert.ok((await db.query('SELECT COUNT(*)::int AS n FROM audit')).rows[0].n>=5);
