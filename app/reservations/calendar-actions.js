@@ -1,6 +1,7 @@
 'use server';
 import {createHash} from 'node:crypto';
 import {redirect} from 'next/navigation';
+import {revalidatePath} from 'next/cache';
 import {requireManager} from '../../lib/auth';
 import {query,transaction} from '../../lib/db.mjs';
 import {integer,text} from '../../lib/security.mjs';
@@ -25,6 +26,7 @@ export async function connectCalendar(form) {
  }catch(error){fail(error.code==='23505'?'Ce calendrier est déjà connecté à un autre appartement.':'Connexion non enregistrée. Vérifiez l’appartement.');}
  const result=await syncCalendar(id);
  if(!result.ok)fail('Lien enregistré. '+result.message);
+ revalidatePath('/');revalidatePath('/reservations');
  redirect(path+'?succes='+encodeURIComponent('Calendrier connecté : '+result.imported+' événements importés'+(result.conflicts?', '+result.conflicts+' chevauchements à vérifier.':'.'))+'#calendriers');
 }
 
@@ -32,6 +34,7 @@ export async function synchronizeCalendar(form) {
  await requireManager();let id;try{id=integer(form.get('connection_id'),1);}catch{fail('Connexion invalide.');}
  const result=await syncCalendar(id);
  if(!result.ok)fail(result.message);
+ revalidatePath('/');revalidatePath('/reservations');
  redirect(path+'?succes='+encodeURIComponent('Synchronisation terminée : '+result.imported+' événements'+(result.conflicts?', '+result.conflicts+' chevauchements à vérifier.':'.'))+'#calendriers');
 }
 

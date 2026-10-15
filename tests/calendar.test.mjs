@@ -38,6 +38,11 @@ test('Import : dédoublonnage, dates modifiées, annulations et conflits ; aucun
   await sync([event('a','20261101','20261104')]);await sync([event('a','20261101','20261104')]);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM reservations')).rows[0].n,2);
   let imported=(await db.query("SELECT * FROM reservations WHERE external_uid='a'")).rows[0];assert.equal(imported.nightly,null);assert.equal(imported.guests,null);
+  await db.exec("UPDATE reservations SET agreed_total=100000,expected_commission=10000,arrival='2026-11-02',departure='2026-11-05',local_dates_override=TRUE WHERE external_uid='a'");
+  await sync([event('a','20261101','20261104')]);
+  const edited=(await db.query("SELECT * FROM reservations WHERE external_uid='a'")).rows[0];
+  assert.equal(new Date(edited.arrival).toISOString().slice(0,10),'2026-11-02');assert.equal(Number(edited.agreed_total),100000);assert.equal(new Date(edited.calendar_arrival).toISOString().slice(0,10),'2026-11-01');
+  await db.exec("UPDATE reservations SET local_dates_override=FALSE WHERE external_uid='a'");
   const result=await sync([event('a','20261102','20261105'),event('b','20261116','20261118')]);
   assert.equal(result.conflicts,1);
   assert.equal((await db.query("SELECT status FROM reservations WHERE external_uid='b'")).rows[0].status,'En attente');

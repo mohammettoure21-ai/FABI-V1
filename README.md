@@ -37,7 +37,7 @@ Les données sont hébergées chez votre fournisseur PostgreSQL, pas sur votre P
 
 ## Ce qui reste à développer
 
-Modification des contacts/biens/séjours, réaffectation, réinitialisation des mots de passe, calendrier graphique, normalisation des téléphones, pagination complète, champs avancés (propriétaires, équipements, WhatsApp…), interface du journal, factures/PDF, paiements, imports CSV/XLSX en libre-service, exports et sauvegardes automatisées. Les listes sont limitées à 200 entrées ; ce n’est pas une version métier complète.
+Modification des contacts/biens, réaffectation, réinitialisation des mots de passe, calendrier graphique, normalisation des téléphones, pagination complète, champs avancés (propriétaires, équipements, WhatsApp…), interface du journal, factures/PDF, paiements, imports CSV/XLSX en libre-service, exports et sauvegardes automatisées. Les listes sont limitées à 200 entrées ; ce n’est pas une version métier complète.
 
 L’administrateur peut créer et désactiver les comptes dans « Équipe & accès ». La désactivation révoque les sessions. Aucune donnée ou identité de propriétaire n’est inventée. Seuls les tests utilisent des exemples fictifs.
 
@@ -107,6 +107,14 @@ Dans Réservations, la liste apparaît avant l’ajout manuel. Les responsables 
 
 Les dates de départ iCal sont exclusives. Les identifiants UID évitent les doublons ; les dates sont mises à jour et les événements futurs retirés d’un flux complet sont annulés dans FABI. Les plages indisponibles sont distinguées des séjours et ne gonflent pas les compteurs de réservations. En cas de chevauchement, le nouvel événement reste en attente avec une alerte ; aucune réservation manuelle n’est écrasée. Les imports sont transactionnels et un flux illisible ne déclenche pas d’annulation. Les liens, redirections et tailles des réponses sont contrôlés. Les erreurs et les journaux ne révèlent pas les liens privés.
 
-Les flux Airbnb/Booking à la journée sont pris en charge. Les récurrences et événements horaires sont refusés explicitement. Les calendriers ne fournissent pas les tarifs, voyageurs ni coordonnées complètes : ces champs restent inconnus. Aucun paiement ni recette n’est créé à partir d’un import. Les modifications faites dans FABI ne sont pas réexportées vers les plateformes ; les séjours d’un calendrier connecté se modifient à la source.
+Les flux Airbnb/Booking à la journée sont pris en charge. Les récurrences et événements horaires sont refusés explicitement. Les calendriers ne fournissent pas les tarifs, voyageurs ni coordonnées complètes : ces champs restent inconnus. Aucun paiement ni recette n’est créé à partir d’un import. Les modifications faites dans FABI ne sont pas réexportées vers les plateformes ; les dates d’un séjour importé peuvent aussi être ajustées localement avec un indicateur et un bouton pour reprendre les dates du calendrier.
 
 La correction ponctuelle `remove_unwanted_imported_rent_20261015` supprime l’écriture importée ciblée par l’administrateur ainsi que sa mention dans les contrôles et l’instantané de l’import. Les autres écritures, y compris les futures saisies de loyers, restent conservées. Les finances proposent un filtre par appartement ou FABI ; les recettes et les charges ne sont pas dupliquées pour ces vues.
+
+## Calendrier visuel, édition et prévisionnel
+
+La page Réservations commence par un calendrier à deux mois, avec une vue annuelle et un sélecteur d’appartement. Les séjours apparaissent en noir : trait rose Airbnb, bleu Booking et blanc pour les saisies CRM. Les séjours en attente sont en pointillé, les indisponibilités distinguées, et les départs restent exclusifs. Le calendrier respecte les droits de lecture des employés et ne leur transmet pas les tarifs des biens.
+
+Le bouton Modifier (ou un clic sur la barre) permet de changer les dates et le prix par nuit ou total du séjour. Les séjours manuels peuvent changer de bien et de statut. Les prix saisis ne sont pas écrasés par iCal. Un changement local des dates d’un séjour importé active une exception explicite ; la synchronisation continue à suivre les dates d’origine et les annulations, tout en conservant l’exception locale. Le bouton de reprise restaure les dates d’origine sous contrôle des chevauchements.
+
+Le graphique garde les recettes du registre en plein et affiche les nuits à venir tarifées en clair. Le prix convenu est réparti sur les nuits au FCFA près, y compris entre deux années. Le prévisionnel ne crée pas de recette comptable et n’est pas présenté comme un encaissement. Pour un appartement, il utilise les prix du séjour ; pour FABI, la commission prévue explicitement saisie par le responsable. Les montants inconnus restent à compléter. Les annulations, séjours en attente et plages indisponibles sont exclus. Le compteur du parc reste limité à la vue FABI.

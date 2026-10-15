@@ -52,11 +52,19 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(await submit('/reservations','client_id',{...booking,arrival:'2026-12-12',departure:'2026-12-14'}),/succes=/);
   await submit('/reservations','id',{id:'1'});
   assert.equal((await db.query('SELECT status FROM reservations WHERE id=1')).rows[0].status,'Annulée');
+  const edit={stay_id:'1',edit_arrival:'2026-12-08',edit_departure:'2026-12-10',edit_property_id:'1',edit_status:'Confirmée',price_mode:'total',price:'70000',expected_commission:'7000'};
+  assert.match(await submit('/reservations?modifier=1','stay_id',edit),/succes=/);
+  assert.equal(Number((await db.query('SELECT agreed_total FROM reservations WHERE id=1')).rows[0].agreed_total),70000);
+  assert.match(await submit('/reservations?modifier=1','stay_id',{...edit,edit_arrival:'2026-12-13',edit_departure:'2026-12-15'}),/erreur=/);
+  assert.equal(new Date((await db.query('SELECT arrival FROM reservations WHERE id=1')).rows[0].arrival).toISOString().slice(0,10),'2026-12-08');
+
   assert.match(await submit('/reservations','client_id',{...booking,client_id:'',property_id:'',source:'Agent',guest_label:'Inconnu',agent_name:'Agent fictif',property_label:'À préciser'}),/succes=/);
   const reservationPage=await (await get('/reservations')).text();
   assert.match(reservationPage,/Agent fictif/);
   assert.ok(reservationPage.indexOf('Vos réservations')<reservationPage.indexOf('<h2>Ajouter une réservation'));
   assert.match(reservationPage,/Calendriers Airbnb/);
+  assert.ok(reservationPage.indexOf('Calendrier des réservations')<reservationPage.indexOf('Vos réservations'));
+  assert.match(reservationPage,/stay-bar/);
   const cleaningKey=randomUUID();
   const cleaning={kind:'depense',cleaning:'1',date:'2026-05-11',property_id:'1',provider:'Ménagère fictive',quantity:'1',request_key:cleaningKey};
   assert.match(await submit('/finances?onglet=menage','request_key',cleaning),/succes=/);
@@ -74,10 +82,22 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(dashboard,/Revenus FABI/);
   assert.match(dashboard,/Revenus mensuels de FABI/);
   assert.doesNotMatch(dashboard,/Prospects actifs|Contacts enregistrés/);
+  assert.match(dashboard,/Appartements actifs/);
   const propertyDashboard=await (await get('/?annee=2026&vue=bien-1')).text();
   assert.match(propertyDashboard,/Recettes locatives/);
+  assert.doesNotMatch(propertyDashboard,/Appartements actifs/);
+  assert.match(propertyDashboard,/Prévisionnel des nuits/);
   assert.match(propertyDashboard,/Revenus mensuels de Appartement fictif/);
   assert.match(await submit('/finances?onglet=depenses','request_key',{...commission,kind:'depense',activity:'Wifi',amount:'14900',request_key:randomUUID()}),/succes=/);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM finance_entries')).rows[0].n,5);
+  await db.exec("INSERT INTO calendar_connections(property_id,provider,calendar_url,url_hash,assigned_to) VALUES(1,'Airbnb','https://www.airbnb.com/calendar/ical/fictif.ics','fictif',1); INSERT INTO reservations(property_id,arrival,departure,guests,nightly,status,source,assigned_to,guest_label,calendar_connection_id,external_uid,calendar_arrival,calendar_departure) VALUES(1,'2027-01-10','2027-01-12',NULL,NULL,'Confirmée','Airbnb',1,'Reserved',1,'fictif','2027-01-10','2027-01-12')");
+  const importedId=(await db.query("SELECT id FROM reservations WHERE external_uid='fictif'")).rows[0].id;
+  assert.match(await submit('/reservations?modifier='+importedId,'stay_id',{stay_id:String(importedId),edit_arrival:'2027-01-11',edit_departure:'2027-01-13',price_mode:'total',price:'80000',expected_commission:'8000'}),/succes=/);
+  const importedPrice=(await db.query('SELECT agreed_total,local_dates_override FROM reservations WHERE id=$1',[importedId])).rows[0];
+  assert.equal(Number(importedPrice.agreed_total),80000);assert.equal(importedPrice.local_dates_override,true);
+  await submit('/reservations?modifier='+importedId,'restore_dates',{stay_id:String(importedId)});
+  assert.equal((await db.query('SELECT local_dates_override FROM reservations WHERE id=$1',[importedId])).rows[0].local_dates_override,false);
+  assert.equal(Number((await db.query('SELECT agreed_total FROM reservations WHERE id=$1',[importedId])).rows[0].agreed_total),80000);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM finance_entries')).rows[0].n,5);
   cookie='';await submit('/connexion','email',{email:'employee@example.test',password:'UnMotDePasseFictif123!'});
   assert.equal((await get('/equipe')).status,307);
@@ -87,8 +107,9 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.doesNotMatch(await (await get('/reservations')).text(),/Client fictif/);
   assert.doesNotMatch(await (await get('/appartements')).text(),/name="reference"/);
   assert.doesNotMatch(await (await get('/reservations')).text(),/name="calendar_url"/);
+  assert.doesNotMatch(await (await get('/reservations?modifier='+importedId)).text(),/name="stay_id"/);
   // Un employé ne doit pas pouvoir réutiliser une action de l’administrateur.
-  assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM reservations')).rows[0].n,3);
+  assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM reservations')).rows[0].n,4);
   assert.ok((await db.query('SELECT COUNT(*)::int AS n FROM audit')).rows[0].n>=5);
  }finally{server.kill();await new Promise(resolve=>server.once('exit',resolve));postgres.close();await db.close();}
 });
