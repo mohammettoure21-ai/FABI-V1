@@ -109,13 +109,24 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(await submit('/finances','payment_stay_id',{payment_stay_id:String(importedId),received:'yes'}),/succes=/);
   assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries WHERE reservation_id=$1',[importedId])).rows[0].n,1);
   await submit('/equipe','name',{name:'Responsable fictif',email:'manager@example.test',password:'UnMotDePasseFictif123!',role:'manager'});
-  const forbidden=['client_id','stay_id','restore_dates','request_key','entry_id','monthly_rent','payment_stay_id','calendar_property_id'].map(key=>captured.get(key)).filter(Boolean);
+  const messageKey=randomUUID();
+  assert.match(await submit('/messages','message',{recipient_id:'2',message:'Préparer ÉCRIN pour le prochain voyageur',message_key:messageKey}),/succes=/);
+  await submit('/messages','message',{recipient_id:'2',message:'Préparer ÉCRIN pour le prochain voyageur',message_key:messageKey});
+  assert.equal((await db.query('SELECT count(*)::int n FROM team_messages')).rows[0].n,1);
+  await submit('/messages','message',{recipient_id:'3',message:'Message réservé au responsable',message_key:randomUUID()});
+  const forbidden=['client_id','stay_id','restore_dates','request_key','entry_id','monthly_rent','payment_stay_id','calendar_property_id','message'].map(key=>captured.get(key)).filter(Boolean);
   const before=JSON.stringify((await db.query('SELECT (SELECT count(*) FROM reservations) AS stays,(SELECT count(*) FROM finance_entries) AS entries,(SELECT count(*) FROM audit WHERE action<>$$Connexion$$) AS audits')).rows);
   for(const role of ['manager','employee']){
    cookie='';await submit('/connexion','email',{email:role+'@example.test',password:'UnMotDePasseFictif123!'});
    const readonly=await (await get('/reservations?modifier='+importedId)).text();
    assert.doesNotMatch(readonly,/name="client_id"|name="stay_id"|name="calendar_url"|href="[^"]*modifier=/);
    assert.doesNotMatch(await (await get('/')).text(),/Nouvelle réservation/);
+   const inbox=await (await get('/messages')).text();assert.equal((await (await get('/api/messages/unread')).json()).count,1);
+   if(role==='employee'){
+    assert.match(inbox,/Préparer ÉCRIN/);assert.doesNotMatch(inbox,/Message réservé au responsable/);
+    assert.match(await (await get('/reservations')).text(),/Airbnb/);
+    assert.doesNotMatch(readonly,/name="price"|name="nightly"|Montant du séjour/);
+   }else{assert.match(inbox,/Message réservé au responsable/);assert.doesNotMatch(inbox,/Préparer ÉCRIN/);}
    if(role==='manager'){
     const finance=await (await get('/finances')).text();assert.match(finance,/Consultation des recettes/);
     assert.doesNotMatch(finance,/name="request_key"|name="entry_id"|name="payment_stay_id"|name="monthly_rent"/);
@@ -128,10 +139,14 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.equal((await get('/finances')).status,307);
   assert.doesNotMatch(await (await get('/')).text(),/Revenus FABI|Revenus mensuels de FABI/);
   assert.doesNotMatch(await (await get('/clients')).text(),/Client fictif/);
-  assert.doesNotMatch(await (await get('/reservations')).text(),/Client fictif/);
+  assert.match(await (await get('/reservations')).text(),/Client fictif/);
   assert.doesNotMatch(await (await get('/appartements')).text(),/name="reference"/);
   assert.doesNotMatch(await (await get('/reservations')).text(),/name="calendar_url"/);
   assert.doesNotMatch(await (await get('/reservations?modifier='+importedId)).text(),/name="stay_id"/);
+  const received=(await db.query('SELECT id FROM team_messages WHERE recipient_id=2')).rows[0].id;
+  await submit('/messages','message_id',{message_id:String(received)});
+  assert.ok((await db.query('SELECT read_at FROM team_messages WHERE id=$1',[received])).rows[0].read_at);
+  assert.equal((await db.query('SELECT read_at FROM team_messages WHERE recipient_id=3')).rows[0].read_at,null);
   // Un employé ne doit pas pouvoir réutiliser une action de l’administrateur.
   assert.equal((await db.query('SELECT COUNT(*)::int AS n FROM reservations')).rows[0].n,4);
   assert.ok((await db.query('SELECT COUNT(*)::int AS n FROM audit')).rows[0].n>=5);

@@ -1,10 +1,14 @@
 'use client';
+import {useState,useEffect} from 'react';
 import Link from 'next/link';
 import {usePathname} from 'next/navigation';
 
-export default function Navigation({role}) {
+export default function Navigation({role,unread=0}) {
  const pathname=usePathname();
- const links=[['/','Tableau de bord'],['/clients','Clients & prospects'],['/appartements','Appartements'],['/reservations','Réservations']];
+ const [count,setCount]=useState(unread);
+ useEffect(()=>setCount(unread),[unread]);
+ useEffect(()=>{let active=true;const controller=new AbortController();async function refresh(){if(document.visibilityState!=='visible')return;try{const response=await fetch('/api/messages/unread',{cache:'no-store',signal:controller.signal});if(response.ok){const data=await response.json();if(active&&Number.isInteger(data.count))setCount(data.count);}}catch{}}const timer=setInterval(refresh,20000);window.addEventListener('focus',refresh);refresh();return()=>{active=false;controller.abort();clearInterval(timer);window.removeEventListener('focus',refresh);};},[pathname]);
+ const links=[['/','Tableau de bord'],['/clients','Clients & prospects'],['/appartements','Appartements'],['/reservations','Réservations'],['/messages','Messages'+(count?' ('+count+')':'')]];
  if(role!=='employee')links.push(['/finances','Finances']);
  if(role==='admin')links.push(['/equipe','Équipe & accès']);
  return <nav aria-label="Navigation principale">{links.map(([href,label])=><Link key={href} href={href} aria-current={(href==='/'?pathname==='/':pathname.startsWith(href))?'page':undefined}>{label}</Link>)}</nav>;
