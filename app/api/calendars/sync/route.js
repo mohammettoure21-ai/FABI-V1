@@ -1,3 +1,4 @@
+import {scheduleActivityEmails} from '../../../../lib/activity';
 import {timingSafeEqual} from 'node:crypto';
 import {expireConversations} from '../../../../lib/messages.mjs';
 import {query,transaction} from '../../../../lib/db.mjs';
@@ -11,6 +12,7 @@ export async function GET(request) {
  if(!secret||a.length!==b.length||!timingSafeEqual(a,b))return Response.json({error:'Unauthorized'},{status:401});
  try{
   await transaction(expireConversations);
+  scheduleActivityEmails();
   const {rows}=await query('SELECT id FROM calendar_connections WHERE active=TRUE ORDER BY last_attempt_at NULLS FIRST,id LIMIT 10');
   const results=[];
   for(const connection of rows)results.push({id:connection.id,...await syncCalendar(connection.id)});

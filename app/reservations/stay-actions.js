@@ -1,4 +1,5 @@
 'use server';
+import {recordActivity} from '../../lib/activity';
 import {redirect} from 'next/navigation';
 import {revalidatePath} from 'next/cache';
 import {requireAdmin} from '../../lib/auth';
@@ -24,9 +25,10 @@ export async function updateStay(form) {
    if(stay.calendar_event_kind==='blocked'&&!convert&&(values.nightly!==null||values.total!==null))throw new Error('CONFIRM_RESERVATION');
    if(stay.calendar_event_kind==='blocked'&&!convert){values.nightly=null;values.total=null;values.commission=null;}
    const commission=user.role==='employee'?stay.expected_commission:values.commission;
+   if(!changedDates&&values.nightly===stay.nightly&&values.total===stay.agreed_total&&commission===stay.expected_commission&&propertyId===stay.property_id&&status===stay.status&&override===stay.local_dates_override&&!convert)return;
    await db.query(`UPDATE reservations SET arrival=$2,departure=$3,nightly=$4,agreed_total=$5,expected_commission=$6,property_id=$7,status=$8,
     local_reservation_override=local_reservation_override OR $10,calendar_event_kind=CASE WHEN $10 THEN 'reservation' ELSE calendar_event_kind END,local_dates_override=$9,calendar_conflict=CASE WHEN $9 THEN FALSE ELSE calendar_conflict END WHERE id=$1`,[id,values.arrival,values.departure,values.nightly,values.total,commission,propertyId,status,override,convert]);
-   await db.query('INSERT INTO audit(user_id,action) VALUES($1,$2)',[user.id,'Modification séjour '+id+' : dates et prix']);
+   await recordActivity(db,user.id,'Modification séjour '+id+' : dates et prix');
   });
  }catch(error){fail(id,error.message==='CONFIRM_RESERVATION'?'Cochez « Ce blocage correspond à un séjour » pour ajouter son prix.':error.code==='23P01'?'Ces dates chevauchent un séjour confirmé. Aucune modification conservée.':'Modification impossible. Vérifiez le séjour et l’appartement.');}
  revalidatePath('/');revalidatePath('/reservations');
@@ -38,7 +40,7 @@ export async function restoreCalendarDates(form) {
   await transaction(async db=>{
    const result=await db.query("UPDATE reservations SET arrival=calendar_arrival,departure=calendar_departure,local_dates_override=FALSE WHERE id=$1 AND calendar_arrival IS NOT NULL AND calendar_departure IS NOT NULL AND ($2<>'employee' OR assigned_to=$3) RETURNING id",[id,user.role,user.id]);
    if(!result.rows.length)throw new Error('NOT_FOUND');
-   await db.query('INSERT INTO audit(user_id,action) VALUES($1,$2)',[user.id,'Reprise des dates du calendrier pour le séjour '+id]);
+   await recordActivity(db,user.id,'Reprise des dates du calendrier pour le séjour '+id);
   });
  }catch{fail(id,'Les dates du calendrier ne peuvent pas être reprises : vérifiez les chevauchements.');}
  revalidatePath('/');revalidatePath('/reservations');

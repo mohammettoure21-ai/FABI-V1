@@ -36,6 +36,7 @@ test('Import : dédoublonnage, dates modifiées, annulations et conflits ; aucun
   const connection=(await db.query('SELECT * FROM calendar_connections')).rows[0];
   const sync=async events=>{await db.exec('BEGIN');try{const result=await applyCalendarSnapshot(db,connection,parseICalendar(feed(events)),'2026-10-15');await db.exec('COMMIT');return result;}catch(error){await db.exec('ROLLBACK');throw error;}};
   await sync([event('a','20261101','20261104')]);await sync([event('a','20261101','20261104')]);
+  assert.equal((await db.query("SELECT count(*)::int n FROM audit WHERE action LIKE 'Mise à jour des séjours par calendrier %'")).rows[0].n,1);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM reservations')).rows[0].n,2);
   let imported=(await db.query("SELECT * FROM reservations WHERE external_uid='a'")).rows[0];assert.equal(imported.nightly,null);assert.equal(imported.guests,null);
   await db.exec("UPDATE reservations SET agreed_total=100000,expected_commission=10000,arrival='2026-11-02',departure='2026-11-05',local_dates_override=TRUE WHERE external_uid='a'");

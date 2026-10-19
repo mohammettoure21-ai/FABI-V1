@@ -109,11 +109,14 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(await submit('/finances','payment_stay_id',{payment_stay_id:String(importedId),received:'yes'}),/succes=/);
   assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries WHERE reservation_id=$1',[importedId])).rows[0].n,1);
   await submit('/equipe','name',{name:'Responsable fictif',email:'manager@example.test',password:'UnMotDePasseFictif123!',role:'manager'});
+  const activityBeforeMessages=(await db.query('SELECT count(*)::int n FROM activity_email_deliveries')).rows[0].n;
+  assert.ok(activityBeforeMessages>0);
   const messageKey=randomUUID();
   assert.match(await submit('/messages','message',{recipient_id:'2',message:'Préparer ÉCRIN pour le prochain voyageur',message_key:messageKey}),/succes=/);
   await submit('/messages','message',{recipient_id:'2',message:'Préparer ÉCRIN pour le prochain voyageur',message_key:messageKey});
   assert.equal((await db.query('SELECT count(*)::int n FROM team_messages')).rows[0].n,1);
   await submit('/messages','message',{recipient_id:'3',message:'Message réservé au responsable',message_key:randomUUID()});
+  assert.equal((await db.query('SELECT count(*)::int n FROM activity_email_deliveries')).rows[0].n,activityBeforeMessages);
   const forbidden=['client_id','stay_id','restore_dates','request_key','entry_id','monthly_rent','payment_stay_id','calendar_property_id'].map(key=>captured.get(key)).filter(Boolean);
   const before=JSON.stringify((await db.query('SELECT (SELECT count(*) FROM reservations) AS stays,(SELECT count(*) FROM finance_entries) AS entries,(SELECT count(*) FROM audit WHERE action<>$$Connexion$$) AS audits')).rows);
   for(const role of ['manager','employee']){
