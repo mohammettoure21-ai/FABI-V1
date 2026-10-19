@@ -12,9 +12,9 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
  const port=postgres.address().port,origin='http://127.0.0.1:3012';
  const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3012'],{env:{...process.env,DATABASE_URL:`postgresql://test:test@127.0.0.1:${port}/test`,NEXT_TELEMETRY_DISABLED:'1',FABI_SETUP_TOKEN:'installation-fictive-32-caracteres-minimum',CRON_SECRET:'cron-local-fictif-pour-les-tests'},stdio:['ignore','pipe','pipe']});
  let output='';server.stdout.on('data',d=>output+=d);server.stderr.on('data',d=>output+=d);
- let cookie='';
+ let cookie='';const captured=new Map();
  async function get(path){return fetch(origin+path,{redirect:'manual',headers:{cookie}});}
- async function submit(path,marker,data){const page=await get(path);const html=await page.text();const forms=[...html.matchAll(/<form\b[^>]*>([\s\S]*?)<\/form>/g)].map(m=>m[1]);const form=forms.find(f=>f.includes('name="'+marker+'"'));assert.ok(form,'Formulaire absent : '+marker+' '+html.slice(0,120));const fields=new FormData();for(const match of form.matchAll(/<input[^>]*name="(\$ACTION_[^"]+)"([^>]*)>/g))fields.set(match[1],(match[2].match(/value="([^"]*)"/)?.[1]??'').replaceAll('&quot;','"').replaceAll('&amp;','&'));for(const [key,value] of Object.entries(data))fields.set(key,value);const response=await fetch(origin+path,{method:'POST',body:fields,redirect:'manual',headers:{cookie,origin}});const newCookie=response.headers.get('set-cookie');if(newCookie)cookie=newCookie.split(';')[0];assert.equal(response.status,303,'Échec action : '+await response.text()+'\n'+output+'\n'+form.slice(0,600));return response.headers.get('location');}
+ async function submit(path,marker,data){const page=await get(path);const html=await page.text();const forms=[...html.matchAll(/<form\b[^>]*>([\s\S]*?)<\/form>/g)].map(m=>m[1]);const form=forms.find(f=>f.includes('name="'+marker+'"'));assert.ok(form,'Formulaire absent : '+marker+' '+html.slice(0,120));const fields=new FormData();for(const match of form.matchAll(/<input[^>]*name="(\$ACTION_[^"]+)"([^>]*)>/g))fields.set(match[1],(match[2].match(/value="([^"]*)"/)?.[1]??'').replaceAll('&quot;','"').replaceAll('&amp;','&'));for(const [key,value] of Object.entries(data))fields.set(key,value);captured.set(marker,{path,fields:[...fields.entries()]});const response=await fetch(origin+path,{method:'POST',body:fields,redirect:'manual',headers:{cookie,origin}});const newCookie=response.headers.get('set-cookie');if(newCookie)cookie=newCookie.split(';')[0];assert.equal(response.status,303,'Échec action : '+await response.text()+'\n'+output+'\n'+form.slice(0,600));return response.headers.get('location');}
  try{
   let ready=false;for(let i=0;i<100;i++){try{if((await get('/connexion')).status===200){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,100));}assert.ok(ready,output);
   assert.equal((await get('/clients')).status,307);
@@ -108,6 +108,21 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries WHERE reservation_id=$1',[importedId])).rows[0].n,0);
   assert.match(await submit('/finances','payment_stay_id',{payment_stay_id:String(importedId),received:'yes'}),/succes=/);
   assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries WHERE reservation_id=$1',[importedId])).rows[0].n,1);
+  await submit('/equipe','name',{name:'Responsable fictif',email:'manager@example.test',password:'UnMotDePasseFictif123!',role:'manager'});
+  const forbidden=['client_id','stay_id','restore_dates','request_key','entry_id','monthly_rent','payment_stay_id','calendar_property_id'].map(key=>captured.get(key)).filter(Boolean);
+  const before=JSON.stringify((await db.query('SELECT (SELECT count(*) FROM reservations) AS stays,(SELECT count(*) FROM finance_entries) AS entries,(SELECT count(*) FROM audit WHERE action<>$$Connexion$$) AS audits')).rows);
+  for(const role of ['manager','employee']){
+   cookie='';await submit('/connexion','email',{email:role+'@example.test',password:'UnMotDePasseFictif123!'});
+   const readonly=await (await get('/reservations?modifier='+importedId)).text();
+   assert.doesNotMatch(readonly,/name="client_id"|name="stay_id"|name="calendar_url"|href="[^"]*modifier=/);
+   assert.doesNotMatch(await (await get('/')).text(),/Nouvelle réservation/);
+   if(role==='manager'){
+    const finance=await (await get('/finances')).text();assert.match(finance,/Consultation des recettes/);
+    assert.doesNotMatch(finance,/name="request_key"|name="entry_id"|name="payment_stay_id"|name="monthly_rent"/);
+   }
+   for(const action of forbidden){const body=new FormData();for(const [key,value] of action.fields)body.set(key,value);const response=await fetch(origin+action.path,{method:'POST',body,redirect:'manual',headers:{cookie,origin}});assert.equal(response.status,500,'Action interdite acceptée pour '+role+' '+action.path);}
+  }
+  assert.equal(JSON.stringify((await db.query('SELECT (SELECT count(*) FROM reservations) AS stays,(SELECT count(*) FROM finance_entries) AS entries,(SELECT count(*) FROM audit WHERE action<>$$Connexion$$) AS audits')).rows),before);
   cookie='';await submit('/connexion','email',{email:'employee@example.test',password:'UnMotDePasseFictif123!'});
   assert.equal((await get('/equipe')).status,307);
   assert.equal((await get('/finances')).status,307);

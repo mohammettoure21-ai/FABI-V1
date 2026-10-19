@@ -2,7 +2,7 @@
 import {createHash} from 'node:crypto';
 import {redirect} from 'next/navigation';
 import {revalidatePath} from 'next/cache';
-import {requireManager} from '../../lib/auth';
+import {requireAdmin} from '../../lib/auth';
 import {query,transaction} from '../../lib/db.mjs';
 import {integer,text} from '../../lib/security.mjs';
 import {validateCalendarUrl} from '../../lib/ical.mjs';
@@ -11,7 +11,7 @@ const path='/reservations';
 function fail(message){redirect(path+'?erreur='+encodeURIComponent(message)+'#calendriers');}
 
 export async function connectCalendar(form) {
- const user=await requireManager();let propertyId,provider,url;
+ const user=await requireAdmin();let propertyId,provider,url;
  try{propertyId=integer(form.get('calendar_property_id'),1);provider=text(form.get('provider'),20);url=validateCalendarUrl(text(form.get('calendar_url'),4001),provider);}
  catch(error){fail(error.message);}
  let id;
@@ -31,7 +31,7 @@ export async function connectCalendar(form) {
 }
 
 export async function synchronizeCalendar(form) {
- await requireManager();let id;try{id=integer(form.get('connection_id'),1);}catch{fail('Connexion invalide.');}
+ await requireAdmin();let id;try{id=integer(form.get('connection_id'),1);}catch{fail('Connexion invalide.');}
  const result=await syncCalendar(id);
  if(!result.ok)fail(result.message);
  revalidatePath('/');revalidatePath('/reservations');
@@ -39,7 +39,7 @@ export async function synchronizeCalendar(form) {
 }
 
 export async function disconnectCalendar(form) {
- const user=await requireManager();let id;try{id=integer(form.get('connection_id'),1);}catch{fail('Connexion invalide.');}
+ const user=await requireAdmin();let id;try{id=integer(form.get('connection_id'),1);}catch{fail('Connexion invalide.');}
  await transaction(async db=>{
   await db.query('UPDATE calendar_connections SET active=FALSE WHERE id=$1',[id]);
   await db.query('INSERT INTO audit(user_id,action) VALUES($1,$2)',[user.id,'Déconnexion calendrier '+id+' ; réservations conservées']);

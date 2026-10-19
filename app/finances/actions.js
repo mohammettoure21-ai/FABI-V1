@@ -2,13 +2,13 @@
 import {revalidatePath} from 'next/cache';
 import {reviewStayPayment} from '../../lib/stay-payment.mjs';
 import {redirect} from 'next/navigation';
-import {requireManager} from '../../lib/auth';
+import {requireAdmin} from '../../lib/auth';
 import {transaction} from '../../lib/db.mjs';
 import {integer,text} from '../../lib/security.mjs';
 import {activities} from '../../lib/finance.mjs';
 
 export async function saveFinanceEntry(form) {
- const user=await requireManager();
+ const user=await requireAdmin();
  let entry;
  try {
   const kind=text(form.get('kind'),20);
@@ -45,7 +45,7 @@ export async function saveFinanceEntry(form) {
 }
 
 export async function markExpensePaid(form) {
- const user=await requireManager();
+ const user=await requireAdmin();
  let id;
  try{id=integer(form.get('entry_id'),1);}catch{redirect('/finances?erreur=Écriture+invalide');}
  await transaction(async db=>{
@@ -56,7 +56,7 @@ export async function markExpensePaid(form) {
 }
 
 export async function saveMonthlyRent(form) {
- const user=await requireManager();
+ const user=await requireAdmin();
  let propertyId,amount;
  try{propertyId=integer(form.get('property_id'),1);amount=integer(form.get('amount'));}
  catch{redirect('/finances?erreur=Montant+ou+appartement+invalide');}
@@ -72,7 +72,7 @@ export async function saveMonthlyRent(form) {
 }
 
 export async function confirmStayPayment(form) {
- const user=await requireManager();
+ const user=await requireAdmin();
  let id,received;
  try{id=integer(form.get('payment_stay_id'),1);if(!['yes','no'].includes(form.get('received')))throw new Error();received=form.get('received')==='yes';}
  catch{redirect('/finances?erreur=Séjour+ou+réponse+invalide');}

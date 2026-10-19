@@ -27,13 +27,13 @@ function EntryForm({properties,cleaning=false,kind='depense',today,defaultProper
   <button>{cleaning?'Enregistrer le passage':'Enregistrer l’écriture'}</button>
  </form>;
 }
-function Entries({entries}) {
+function Entries({entries,canWrite=true}) {
  return entries.length?<div className="table-scroll"><table><thead><tr><th>Date / période</th><th>Appartement / entreprise</th><th>Type / activité</th><th>Description / origine</th><th>Montant</th><th>Paiement</th><th>Commentaire / source</th></tr></thead><tbody>{entries.map(e=><tr key={e.id}>
   <td>{months[e.reporting_month-1]} {e.reporting_year}{e.original_date&&<small className="source-date">{e.original_date}</small>}</td>
   <td>{e.property_name??e.company}{e.detail&&<small className="source-date">{e.detail}</small>}</td>
   <td>{kinds[e.kind]}<small className="source-date">{e.activity}</small></td>
   <td>{e.description}{e.provider&&<small className="source-date">{e.provider}</small>}{e.activity==='Ménage'&&<small className="source-date">{e.quantity} passage(s) · {money(Number(e.unit_amount??5000))} / passage</small>}</td>
-  <td>{money(Number(e.amount))}</td><td>{e.payment_status}{['depense','loyer'].includes(e.kind)&&e.payment_status!=='Payé'&&<form action={markExpensePaid}><input type="hidden" name="entry_id" value={e.id}/><button className="secondary">Marquer payé</button></form>}</td>
+  <td>{money(Number(e.amount))}</td><td>{e.payment_status}{canWrite&&['depense','loyer'].includes(e.kind)&&e.payment_status!=='Payé'&&<form action={markExpensePaid}><input type="hidden" name="entry_id" value={e.id}/><button className="secondary">Marquer payé</button></form>}</td>
   <td>{e.comment}{e.warnings.map((warning,i)=><p className="finance-warning" key={i}>{warning}</p>)}<small className="source-date">{e.source_sheet}{e.source_row?', ligne '+e.source_row:''}</small></td>
  </tr>)}</tbody></table></div>:<Empty text="Aucune écriture sur cette période."/>;
 }
@@ -60,6 +60,7 @@ export default async function Finances({searchParams}) {
  const today=new Date().toISOString().slice(0,10);
  const selected=entries.filter(e=>tab==='commissions'?e.kind==='commission':tab==='depenses'?e.kind==='depense':tab==='menage'?e.kind==='depense'&&e.activity==='Ménage':true);
  const fabiBalance=totals.recette+totals.commission-totals.depense-totals.loyer;
+ if(user.role!=='admin')return <><Header title="Finances" description="Consultation des recettes et dépenses."/><section className="panel"><form className="finance-filters" method="get"><Input label="Année" name="annee" type="number" min="2000" max="2200" defaultValue={year}/><label>Mois<select name="mois" defaultValue={month??''}><option value="">Tous les mois</option>{months.map((name,i)=><option key={name} value={i+1}>{name}</option>)}</select></label><label>Appartement<select name="bien" defaultValue={scope}><option value="">Tous les appartements et FABI</option><option value="fabi">FABI</option>{properties.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label><button>Afficher</button></form></section><div className="cards finance-stats">{[['Recettes',totals.recette],['Commissions FABI',totals.commission],['Charges',totals.depense+totals.loyer],['Résultat',fabiBalance]].map(([label,value])=><article key={label}><small>{label}</small><h2>{money(value)}</h2></article>)}</div><section className="panel"><h2>Historique des opérations</h2><Entries entries={entries} canWrite={false}/></section></>;
  return <><Header eyebrow="FABI CONCIERGERIE" title="Finances" description="Vos recettes, vos dépenses et les paiements à confirmer."/>
   <Messages params={params}/>
   <nav className="finance-tabs" aria-label="Rubriques financières">{[['bilan','Bilan par appartement'],['commissions','Commissions FABI'],['depenses','Dépenses'],['menage','Ménage']].map(([value,label])=><Link key={value} aria-current={tab===value?'page':undefined} href={'/finances?annee='+year+(month?'&mois='+month:'')+'&onglet='+value+(scope?'&bien='+scope:'')}>{label}</Link>)}</nav>
