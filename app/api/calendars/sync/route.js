@@ -1,5 +1,6 @@
 import {timingSafeEqual} from 'node:crypto';
-import {query} from '../../../../lib/db.mjs';
+import {expireConversations} from '../../../../lib/messages.mjs';
+import {query,transaction} from '../../../../lib/db.mjs';
 import {syncCalendar} from '../../../../lib/calendar-sync.mjs';
 export const dynamic='force-dynamic';
 export const maxDuration=300;
@@ -9,6 +10,7 @@ export async function GET(request) {
  const a=Buffer.from(provided),b=Buffer.from(expected);
  if(!secret||a.length!==b.length||!timingSafeEqual(a,b))return Response.json({error:'Unauthorized'},{status:401});
  try{
+  await transaction(expireConversations);
   const {rows}=await query('SELECT id FROM calendar_connections WHERE active=TRUE ORDER BY last_attempt_at NULLS FIRST,id LIMIT 10');
   const results=[];
   for(const connection of rows)results.push({id:connection.id,...await syncCalendar(connection.id)});

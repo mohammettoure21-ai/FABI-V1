@@ -20,5 +20,7 @@ test('Notifications Gmail : absence de secret, échec, reprise et concurrence sa
   assert.ok(results.includes('sent'));assert.equal(sent,1);
   assert.equal(await notifyMessageEmail(db,1,1,{env,sendMail}),'unchanged');
   const row=(await db.query('SELECT * FROM team_messages')).rows[0];assert.equal(row.email_status,'sent');assert.ok(row.email_sent_at);
+  await db.query("INSERT INTO team_messages(sender_id,recipient_id,body,request_key) VALUES(2,1,'Réponse privée',$1)",['00000000-0000-4000-8000-000000000002']);
+  assert.equal(await notifyMessageEmail(db,2,2,{env,sendMail:async mail=>{assert.equal(mail.to,'admin@example.test');assert.doesNotMatch(mail.text,/Réponse privée/);return {accepted:[mail.to]};}}),'sent');
  }finally{await db.close();}
 });

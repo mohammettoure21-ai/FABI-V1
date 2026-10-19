@@ -120,3 +120,10 @@ Le bouton Modifier (ou un clic sur la barre) permet de changer les dates et le p
 Le graphique garde les recettes du registre en plein et affiche les nuits à venir tarifées en clair. Le prix convenu est réparti sur les nuits au FCFA près, y compris entre deux années. Le prévisionnel ne crée pas de recette comptable et n’est pas présenté comme un encaissement. Pour un appartement, il utilise les prix du séjour ; pour FABI, la commission prévue explicitement saisie par le responsable. Les montants inconnus restent à compléter. Les annulations, séjours en attente et plages indisponibles sont exclus. Le compteur du parc reste limité à la vue FABI.
 
 Les blocages iCal Airbnb/Booking sont indicatifs et restent visibles : ils n’empêchent pas une réservation manuelle FABI. Seuls les vrais séjours confirmés empêchent les chevauchements. Cette saisie ne modifie pas le calendrier sur la plateforme.
+
+
+## Discussions privées et conservation
+
+Messages regroupe les échanges par collaborateur, dans l’ordre chronologique. L’administrateur peut écrire à chaque collaborateur ; les employés et responsables peuvent écrire à un administrateur et lui répondre. Seuls les deux participants peuvent lire leur discussion. Les notifications Gmail et leurs reprises fonctionnent dans les deux sens. Les messages anciens restent accessibles par « Voir les messages précédents ».
+
+Une discussion complète est supprimée lorsque son dernier message date de 7 jours ou plus, dans les deux sens. Un nouveau message avant expiration relance le délai pour tout l’historique. Lire un message ou réessayer une notification ne relance pas le délai. Le nettoyage s’effectue à l’ouverture de Messages, avant l’envoi, et dans la tâche quotidienne existante à 04 h UTC, même sans visite. Les suppressions et les envois sont sérialisés pour éviter une course au moment de l’expiration. Le nettoyage porte uniquement sur les messages du CRM, sans supprimer les e-mails déjà reçus ni modifier les clients, séjours ou finances.
