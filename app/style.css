@@ -22,3 +22,5 @@ html{scroll-behavior:smooth}body{font-family:Inter,'Segoe UI',Arial,sans-serif;-
 .form-options{border:1px solid var(--line);border-radius:12px;padding:12px 15px;margin:12px 0}.form-options summary,.calendar-help summary,.ledger-details summary{cursor:pointer;font-size:13px;font-weight:600;color:var(--muted)}.form-options[open] summary,.ledger-details[open] summary{margin-bottom:15px;color:var(--ink)}.calendar-help{margin-top:18px}.calendar-help p{font-size:12px;max-width:700px}.form-options .grid-form{gap:0 18px}.stay-card details{padding-top:0}.stay-card{row-gap:8px}.ledger-details .table-scroll{margin-top:18px}.form-options input,.form-options select{background:#fdfafb}
 
 .team-message{padding:20px 0;border-top:1px solid var(--line)}.team-message>div{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.team-message small{letter-spacing:0;font-size:11px}.team-message p{white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink);margin:12px 0}.team-message.unread{border-left:3px solid var(--accent);padding-left:14px}
+
+.email-delivery{display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap}
