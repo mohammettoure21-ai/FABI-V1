@@ -1,4 +1,5 @@
 'use server';
+import {recordActivity,scheduleActivityEmails} from '../../lib/activity';
 import {revalidatePath} from 'next/cache';
 import {reviewStayPayment} from '../../lib/stay-payment.mjs';
 import {redirect} from 'next/navigation';
@@ -38,7 +39,7 @@ export async function saveFinanceEntry(form) {
    const result=await db.query(`INSERT INTO finance_entries(property_id,kind,reporting_year,reporting_month,original_date,description,detail,amount,comment,activity,provider,quantity,unit_amount,payment_status,request_key,created_by)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) ON CONFLICT(request_key) DO NOTHING RETURNING id`,
     [entry.propertyId,entry.kind,entry.year,entry.month,entry.date,entry.description,entry.detail,entry.amount,entry.comment,entry.activity,entry.provider,entry.quantity,entry.unit,entry.paymentStatus,entry.requestKey,user.id]);
-   if(result.rows.length)await db.query('INSERT INTO audit(user_id,action) VALUES($1,$2)',[user.id,'Création écriture financière '+result.rows[0].id]);
+   if(result.rows.length)await recordActivity(db,user.id,'Création écriture financière '+result.rows[0].id);
   });
  }catch{redirect('/finances?erreur=Écriture+non+enregistrée');}
  redirect('/finances?annee='+entry.year+'&succes=Écriture+enregistrée');
@@ -50,7 +51,7 @@ export async function markExpensePaid(form) {
  try{id=integer(form.get('entry_id'),1);}catch{redirect('/finances?erreur=Écriture+invalide');}
  await transaction(async db=>{
   const result=await db.query("UPDATE finance_entries SET payment_status='Payé' WHERE id=$1 AND kind IN ('depense','loyer') AND payment_status<>'Payé' RETURNING id",[id]);
-  if(result.rows.length)await db.query('INSERT INTO audit(user_id,action) VALUES($1,$2)',[user.id,'Paiement écriture financière '+id]);
+  if(result.rows.length)await recordActivity(db,user.id,'Paiement écriture financière '+id);
  });
  redirect('/finances?succes=Paiement+noté,+sans+nouvelle+dépense');
 }
@@ -64,8 +65,8 @@ export async function saveMonthlyRent(form) {
   await transaction(async db=>{
    const property=await db.query('SELECT id FROM properties WHERE id=$1 FOR SHARE',[propertyId]);
    if(!property.rows.length)throw new Error('INVALID');
-   await db.query('INSERT INTO property_monthly_rents(property_id,amount) VALUES($1,$2) ON CONFLICT(property_id) DO UPDATE SET amount=EXCLUDED.amount,updated_at=NOW()',[propertyId,amount]);
-   await db.query('INSERT INTO audit(user_id,action) VALUES($1,$2)',[user.id,'Mise à jour loyer mensuel appartement '+propertyId]);
+   const changed=await db.query('INSERT INTO property_monthly_rents(property_id,amount) VALUES($1,$2) ON CONFLICT(property_id) DO UPDATE SET amount=EXCLUDED.amount,updated_at=NOW() WHERE property_monthly_rents.amount IS DISTINCT FROM EXCLUDED.amount RETURNING property_id',[propertyId,amount]);
+   if(changed.rows.length)await recordActivity(db,user.id,'Mise à jour loyer mensuel appartement '+propertyId);
   });
  }catch{redirect('/finances?erreur=Enregistrement+impossible');}
  redirect('/finances?succes=Loyer+mensuel+enregistré');
@@ -76,7 +77,7 @@ export async function confirmStayPayment(form) {
  let id,received;
  try{id=integer(form.get('payment_stay_id'),1);if(!['yes','no'].includes(form.get('received')))throw new Error();received=form.get('received')==='yes';}
  catch{redirect('/finances?erreur=Séjour+ou+réponse+invalide');}
- try{await transaction(db=>reviewStayPayment(db,id,received,user.id));}
+ try{await transaction(db=>reviewStayPayment(db,id,received,user.id));scheduleActivityEmails();}
  catch(error){redirect('/finances?erreur='+encodeURIComponent(error.message==='MISSING_PRICE'?'Ajoutez d’abord le prix du séjour.':'Ce séjour ne peut pas être encaissé.'));}
  revalidatePath('/');revalidatePath('/finances');revalidatePath('/reservations');
  redirect('/finances?succes='+encodeURIComponent(received?'Encaissement enregistré une seule fois.':'Paiement noté non reçu. Vous pourrez le confirmer plus tard.'));
