@@ -21,18 +21,18 @@ test('Destinataires multiples : tous rôles, équipe active, copies de suivi, at
   const send=(user,audience,body,key=randomUUID())=>db.transaction(tx=>insertMessages(tx,user,audience,body,key));
   const key=randomUUID();
   const sent=await send({id:3,role:'employee'},{recipients:[4,4]},'Entre employés',key);
-  assert.deepEqual(sent.map(r=>r.recipient_id).sort(),[1,2,4]);
-  const copies=(await db.query('SELECT recipient_id,is_supervision FROM team_messages ORDER BY recipient_id')).rows;
-  assert.deepEqual(copies,[{recipient_id:1,is_supervision:true},{recipient_id:2,is_supervision:true},{recipient_id:4,is_supervision:false}]);
+  assert.deepEqual(sent.map(r=>r.recipient_id).sort(),[4]);
+  const observers=(await db.query('SELECT user_id FROM team_message_observers ORDER BY user_id')).rows;
+  assert.deepEqual(observers,[{user_id:1},{user_id:2}]);
   assert.equal((await db.query('SELECT id FROM team_messages WHERE recipient_id=6')).rows.length,0);
   // Same request key must not turn an individual send into a new broadcast.
   assert.deepEqual(await send({id:3,role:'employee'},{all:true},'Autre contenu',key),[]);
-  assert.equal((await db.query('SELECT count(*)::int n FROM team_messages')).rows[0].n,3);
+  assert.equal((await db.query('SELECT count(*)::int n FROM team_messages')).rows[0].n,1);
   await assert.rejects(send({id:3,role:'employee'},{recipients:[4,5]},'Doit échouer entièrement'));
   await assert.rejects(send({id:3,role:'employee'},{recipients:[3]},'Soi-même'));
   await assert.rejects(send({id:3,role:'employee'},{recipients:[]},'Personne'));
   await assert.rejects(send({id:3,role:'employee'},{recipients:[999]},'Inconnu'));
-  assert.equal((await db.query('SELECT count(*)::int n FROM team_messages')).rows[0].n,3);
+  assert.equal((await db.query('SELECT count(*)::int n FROM team_messages')).rows[0].n,1);
   const broadcast=await send({id:2,role:'manager'},{all:true},'Annonce responsable');
   assert.deepEqual(broadcast.map(r=>r.recipient_id),[1,3,4,6]);
   const selected=await send({id:2,role:'manager'},{recipients:[3,4]},'Deux destinataires');

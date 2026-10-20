@@ -1,4 +1,5 @@
 import {requireUser} from '../../../../lib/auth';
 import {query} from '../../../../lib/db.mjs';
+import {unreadMessageCount} from '../../../../lib/messages.mjs';
 export const dynamic='force-dynamic';
-export async function GET(){const user=await requireUser();const {rows}=await query('SELECT count(*)::int AS count FROM team_messages WHERE recipient_id=$1 AND read_at IS NULL',[user.id]);return Response.json(rows[0],{headers:{'Cache-Control':'private, no-store'}});}
+export async function GET(){const user=await requireUser();const count=await unreadMessageCount({query},user);return Response.json({count},{headers:{'Cache-Control':'private, no-store'}});}

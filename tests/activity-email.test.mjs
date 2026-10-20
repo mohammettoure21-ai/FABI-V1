@@ -26,7 +26,9 @@ test('Activité : tous les comptes actifs, confidentialité, transaction, repris
   await db.transaction(tx=>recordActivity(tx,1,'Création écriture financière 1'));
   await deliverActivityEmails(db,{env,limit:1,sendMail:async()=>{throw new Error('SMTP');}});
   assert.equal((await db.query("SELECT count(*)::int n FROM activity_email_deliveries WHERE status='failed'")).rows[0].n,1);
-  await db.exec('UPDATE users SET active=FALSE WHERE id=2');
+  assert.equal((await db.query("SELECT count(*)::int n FROM activity_email_deliveries d JOIN audit a ON a.id=d.audit_id WHERE a.action='Création écriture financière 1' AND d.recipient_id=2")).rows[0].n,0);
+  // Simulate a notification queued before the new rule: delivery must skip it too.
+  await db.exec("INSERT INTO activity_email_deliveries(audit_id,recipient_id) SELECT id,2 FROM audit WHERE action='Création écriture financière 1'");
   await deliverActivityEmails(db,{env,sendMail});
   assert.equal((await db.query("SELECT count(*)::int n FROM activity_email_deliveries WHERE status='skipped'")).rows[0].n,1);
   assert.equal(sent.length,3);

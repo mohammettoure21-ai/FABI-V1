@@ -1,7 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import Link from 'next/link';
 import {redirect} from 'next/navigation';
-import {requireUser} from '../../lib/auth';
+import {requireStaff} from '../../lib/auth';
 import {query} from '../../lib/db.mjs';
 import {money} from '../../lib/security.mjs';
 import {months,kinds,activities,summarize,cleaningSummary} from '../../lib/finance.mjs';
@@ -38,7 +38,7 @@ function Entries({entries,canWrite=true}) {
  </tr>)}</tbody></table></div>:<Empty text="Aucune écriture sur cette période."/>;
 }
 export default async function Finances({searchParams}) {
- const user=await requireUser();if(user.role==='employee')redirect('/');
+ const user=await requireStaff();if(user.role==='employee')redirect('/');
  const params=await searchParams;
  const year=/^\d{4}$/.test(params.annee??'')?Number(params.annee):new Date().getUTCFullYear();
  const month=/^(?:[1-9]|1[0-2])$/.test(params.mois??'')?Number(params.mois):null;

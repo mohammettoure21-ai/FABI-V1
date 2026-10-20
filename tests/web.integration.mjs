@@ -26,6 +26,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   await submit('/equipe','name',{name:'Employé fictif',email:'employee@example.test',password:'UnMotDePasseFictif123!',role:'employee'});
   await submit('/clients','name',{name:'Client fictif',phone:'+221000000000',email:'client@example.test',status:'Nouveau',notes:'Test sans données réelles'});
   assert.match(await (await get('/clients')).text(),/Client fictif/);
+  const createClientAction=captured.get('name');
   assert.match(await submit('/clients','name',{name:'Doublon',phone:'+221000000000',email:'',status:'Nouveau'}),/erreur=/);
   await submit('/appartements','reference',{reference:'FICTIF',name:'Appartement fictif',neighborhood:'Quartier fictif',category:'F2',bedrooms:'1',nightly:'10000',status:'Disponible'});
   const propertiesPage=await (await get('/appartements')).text();
@@ -83,6 +84,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(dashboard,/Revenus mensuels de FABI/);
   assert.doesNotMatch(dashboard,/Prospects actifs|Contacts enregistrés/);
   assert.match(dashboard,/Appartements actifs/);
+  assert.doesNotMatch(dashboard,/class="metric forecast-metric"/);
   const propertyDashboard=await (await get('/?annee=2026&vue=bien-1')).text();
   assert.match(propertyDashboard,/Recettes locatives/);
   assert.doesNotMatch(propertyDashboard,/Appartements actifs/);
@@ -124,12 +126,12 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
    const readonly=await (await get('/reservations?modifier='+importedId)).text();
    assert.doesNotMatch(readonly,/name="client_id"|name="stay_id"|name="calendar_url"|href="[^"]*modifier=/);
    assert.doesNotMatch(await (await get('/')).text(),/Nouvelle réservation/);
-   const inbox=await (await get('/messages?dest=1')).text();assert.equal((await (await get('/api/messages/unread')).json()).count,1);
+   const inbox=await (await get('/messages?dest=1')).text();assert.equal((await (await get('/api/messages/unread')).json()).count,role==='manager'?2:1);
    if(role==='employee'){
     assert.match(inbox,/Préparer ÉCRIN/);assert.doesNotMatch(inbox,/Message réservé au responsable/);
     assert.match(await (await get('/reservations')).text(),/Airbnb/);
     assert.doesNotMatch(readonly,/name="price"|name="nightly"|Montant du séjour/);
-   }else{assert.match(inbox,/Message réservé au responsable/);assert.doesNotMatch(inbox,/Préparer ÉCRIN/);}
+   }else{assert.match(inbox,/Message réservé au responsable/);assert.match(inbox,/Suivi des employés/);}
    if(role==='manager'){
     const finance=await (await get('/finances')).text();assert.match(finance,/Consultation des recettes/);
     assert.doesNotMatch(finance,/name="request_key"|name="entry_id"|name="payment_stay_id"|name="monthly_rent"/);
@@ -154,7 +156,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.equal((await db.query('SELECT count(*)::int n FROM team_messages WHERE sender_id=2 AND recipient_id=1')).rows[0].n,1);
   const allowed=await submit('/messages?dest=1','message',{recipient_id:'3',message:'Message au responsable',message_key:randomUUID()});
   assert.match(allowed,/succes=/);
-  assert.equal((await db.query("SELECT count(*)::int n FROM team_messages WHERE sender_id=2 AND body='Message au responsable'")).rows[0].n,2);
+  assert.equal((await db.query("SELECT count(*)::int n FROM team_messages WHERE sender_id=2 AND body='Message au responsable'")).rows[0].n,1);
   cookie='';await submit('/connexion','email',{email:'admin@example.test',password:'UnMotDePasseFictif123!'});
   const discussion=await (await get('/messages?dest=2')).text();
   assert.match(discussion,/ÉCRIN est prêt/);assert.match(discussion,/Préparer ÉCRIN/);
@@ -174,15 +176,53 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   await submit('/messages','recipient_ids',{audience:'all',message:'Annonce à toute l’équipe',message_key:broadcastKey});
   assert.equal((await db.query('SELECT count(*)::int n FROM team_messages WHERE dispatch_key=$1',[broadcastKey])).rows[0].n,3);
   const secretKey=randomUUID();
-  await submit('/messages','recipient_ids',{audience:'selected',recipient_ids:['4'],message:'Réservé au quatrième compte',message_key:secretKey});
+  await submit('/messages','recipient_ids',{audience:'selected',recipient_ids:['1'],message:'Discussion privée entre encadrants',message_key:secretKey});
   cookie='';await submit('/connexion','email',{email:'employee@example.test',password:'UnMotDePasseFictif123!'});
-  assert.doesNotMatch(await (await get('/messages?dest=3')).text(),/Réservé au quatrième compte/);
+  assert.doesNotMatch(await (await get('/messages?dest=3')).text(),/Discussion privée entre encadrants/);
   const otherMessage=(await db.query('SELECT id FROM team_messages WHERE dispatch_key=$1',[secretKey])).rows[0].id;
   await submit('/messages?dest=3','message_id',{message_id:String(otherMessage)});
   assert.equal((await db.query('SELECT read_at FROM team_messages WHERE id=$1',[otherMessage])).rows[0].read_at,null);
   const staffKey=randomUUID();
   await submit('/messages','recipient_ids',{audience:'selected',recipient_ids:['4'],message:'Employé vers collègue et suivi',message_key:staffKey});
-  assert.deepEqual((await db.query('SELECT recipient_id,is_supervision FROM team_messages WHERE dispatch_key=$1 ORDER BY recipient_id',[staffKey])).rows,[{recipient_id:1,is_supervision:true},{recipient_id:3,is_supervision:true},{recipient_id:4,is_supervision:false}]);
+  assert.deepEqual((await db.query('SELECT recipient_id,is_supervision FROM team_messages WHERE dispatch_key=$1 ORDER BY recipient_id',[staffKey])).rows,[{recipient_id:4,is_supervision:false}]);
+  assert.deepEqual((await db.query('SELECT user_id FROM team_message_observers o JOIN team_messages m ON m.id=o.message_id WHERE m.dispatch_key=$1 ORDER BY user_id',[staffKey])).rows,[{user_id:1},{user_id:3}]);
+  assert.equal((await get('/messages?employee=2&peer=1')).status,404);
+  cookie='';await submit('/connexion','email',{email:'admin@example.test',password:'UnMotDePasseFictif123!'});
+  const replyKey=randomUUID();
+  await submit('/messages','recipient_ids',{audience:'selected',recipient_ids:['2'],message:'Réponse complète pour Mbagnick',message_key:replyKey});
+  const replyId=(await db.query('SELECT id FROM team_messages WHERE dispatch_key=$1',[replyKey])).rows[0].id;
+  cookie='';await submit('/connexion','email',{email:'manager@example.test',password:'UnMotDePasseFictif123!'});
+  const shared=await (await get('/messages?employee=2&peer=1')).text();
+  assert.match(shared,/Préparer ÉCRIN/);assert.match(shared,/ÉCRIN est prêt/);assert.match(shared,/Réponse complète pour Mbagnick/);
+  assert.doesNotMatch(shared.slice(shared.indexOf('class="conversation-history"')).split('<script')[0],/Discussion privée entre encadrants/);
+  await submit('/messages?employee=2&peer=1','observed_message_id',{observed_message_id:String(replyId),employee_id:'2',peer_id:'1'});
+  assert.ok((await db.query('SELECT read_at FROM team_message_observers WHERE message_id=$1 AND user_id=3',[replyId])).rows[0].read_at);
+  assert.equal((await db.query('SELECT read_at FROM team_messages WHERE id=$1',[replyId])).rows[0].read_at,null);
+  cookie='';await submit('/connexion','email',{email:'admin@example.test',password:'UnMotDePasseFictif123!'});
+  await submit('/appartements','reference',{reference:'OTHER-PRIVATE',name:'Autre appartement confidentiel',neighborhood:'Autre quartier',category:'F3',bedrooms:'2',nightly:'90000',status:'Disponible'});
+  const otherProperty=(await db.query("SELECT id FROM properties WHERE reference='OTHER-PRIVATE'")).rows[0].id;
+  await db.query("INSERT INTO finance_entries(property_id,kind,reporting_year,reporting_month,description,amount) VALUES($1,'recette',2026,10,'Recette privée autre appartement',910000),(1,'commission',2026,10,'Commission interne confidentielle',12345)",[otherProperty]);
+  assert.match(await submit('/equipe','name',{name:'Sans bien',email:'bad-owner@example.test',password:'UnMotDePasseFictif123!',role:'owner'}),/erreur=/);
+  await submit('/equipe','name',{name:'Propriétaire fictif',email:'owner@example.test',password:'UnMotDePasseFictif123!',role:'owner',owner_property_id:'1'});
+  const ownerId=(await db.query("SELECT id FROM users WHERE email='owner@example.test'")).rows[0].id;
+  await submit('/messages','recipient_ids',{audience:'selected',recipient_ids:[String(ownerId)],message:'Message privé au propriétaire',message_key:randomUUID()});
+  cookie='';assert.equal(await submit('/connexion','email',{email:'owner@example.test',password:'UnMotDePasseFictif123!'}),'/proprietaire');
+  const ownerPortal=await (await get('/proprietaire?annee=2026&bien='+otherProperty)).text();
+  assert.match(ownerPortal,/Appartement fictif/);assert.match(ownerPortal,/Calendrier des réservations/);assert.match(ownerPortal,/Solde d’exploitation/);
+  assert.doesNotMatch(ownerPortal,/Autre appartement confidentiel|Recette privée autre appartement|Commission interne confidentielle|Client fictif/);
+  assert.doesNotMatch(ownerPortal,/href="\/(clients|appartements|reservations|finances|equipe)"/);
+  for(const path of ['/','/clients','/appartements','/reservations','/finances','/equipe'])assert.equal((await get(path)).status,307);
+  const ownerMessages=await (await get('/messages')).text();assert.match(ownerMessages,/Message privé au propriétaire/);
+  assert.doesNotMatch(ownerMessages,/Responsable fictif|ÉCRIN est prêt|Discussion privée entre encadrants|Suivi des employés/);
+  assert.equal((await get('/messages?employee=2&peer=1')).status,404);
+  assert.match(await submit('/messages','recipient_ids',{audience:'selected',recipient_ids:['3'],message:'Interdit propriétaire vers responsable',message_key:randomUUID()}),/erreur=/);
+  assert.match(await submit('/messages','recipient_ids',{audience:'selected',recipient_ids:['1'],message:'Réponse du propriétaire à admin',message_key:randomUUID()}),/succes=/);
+  const clientCount=(await db.query('SELECT count(*)::int n FROM clients')).rows[0].n;
+  const forgedClient=new FormData();for(const [key,value] of createClientAction.fields)forgedClient.set(key,value);
+  assert.equal((await fetch(origin+createClientAction.path,{method:'POST',body:forgedClient,redirect:'manual',headers:{cookie,origin}})).headers.get('location'),'/proprietaire');
+  assert.equal((await db.query('SELECT count(*)::int n FROM clients')).rows[0].n,clientCount);
+  for(const action of [...forbidden,captured.get('reference')]){const body=new FormData();for(const [key,value] of action.fields)body.set(key,value);assert.equal((await fetch(origin+action.path,{method:'POST',body,redirect:'manual',headers:{cookie,origin}})).status,500);}
+  assert.equal((await db.query('SELECT count(*)::int n FROM activity_email_deliveries WHERE recipient_id=$1',[ownerId])).rows[0].n,0);
   await db.exec("UPDATE team_messages SET created_at=NOW()-INTERVAL '8 days'");
   assert.ok([200,207].includes((await fetch(origin+'/api/calendars/sync',{headers:{authorization:'Bearer cron-local-fictif-pour-les-tests'}})).status));
   assert.equal((await db.query('SELECT count(*)::int n FROM team_messages')).rows[0].n,0);

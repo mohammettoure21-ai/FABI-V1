@@ -3,7 +3,7 @@ import ReservationCalendar from './reservation-calendar';
 import StayList from './stay-list';
 import {updateStay,restoreCalendarDates} from './stay-actions';
 import {stayAmount} from '../../lib/stay.mjs';
-import {requireUser} from '../../lib/auth';
+import {requireStaff} from '../../lib/auth';
 import {query} from '../../lib/db.mjs';
 import {money} from '../../lib/security.mjs';
 import {saveReservation} from '../actions';
@@ -11,7 +11,7 @@ import {connectCalendar,synchronizeCalendar,disconnectCalendar} from './calendar
 import {Header,Input,Select,Messages} from '../components';
 const syncDate=value=>value?new Date(value).toLocaleString('fr-SN',{timeZone:'Africa/Dakar'}):'Pas encore synchronisé';
 export default async function Reservations({searchParams}) {
- const user=await requireUser(),params=await searchParams,manager=user.role!=='employee',canWrite=user.role==='admin';
+ const user=await requireStaff(),params=await searchParams,manager=user.role!=='employee',canWrite=user.role==='admin';
  const now=new Date();
  const requestedYear=Number(params.cal_annee),requestedMonth=Number(params.cal_mois);
  const calYear=Number.isInteger(requestedYear)&&requestedYear>=2000&&requestedYear<=2200?requestedYear:now.getUTCFullYear();
