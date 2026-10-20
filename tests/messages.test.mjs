@@ -21,7 +21,7 @@ test('Discussions privées : réponses, droits et expiration selon la dernière 
   assert.equal((await db.query('SELECT count(*)::int n FROM team_messages')).rows[0].n,2);
   assert.ok((await db.query('SELECT id FROM team_messages WHERE id=$1',[first])).rows.length);
   const key=randomUUID();assert.ok(await send(2,1,'Je vous réponds',key));assert.equal(await send(2,1,'Je vous réponds',key),undefined);
-  await assert.rejects(send(2,3,'Interdit'));await assert.rejects(send(2,2,'Soi-même'));
+  assert.ok(await send(2,3,'Message entre collaborateurs'));await assert.rejects(send(2,2,'Soi-même'));
   await db.exec('UPDATE users SET active=FALSE WHERE id=3');await assert.rejects(send(1,3,'Inactif'));
   await db.exec("UPDATE team_messages SET created_at=NOW()-INTERVAL '8 days'");
   // A new message after expiry starts a fresh discussion, never revives old data.

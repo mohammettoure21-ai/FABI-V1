@@ -1,3 +1,4 @@
+import {scheduleMessageEmails} from '../../../../lib/message-delivery';
 import {scheduleActivityEmails} from '../../../../lib/activity';
 import {timingSafeEqual} from 'node:crypto';
 import {expireConversations} from '../../../../lib/messages.mjs';
@@ -13,6 +14,7 @@ export async function GET(request) {
  try{
   await transaction(expireConversations);
   scheduleActivityEmails();
+  scheduleMessageEmails();
   const {rows}=await query('SELECT id FROM calendar_connections WHERE active=TRUE ORDER BY last_attempt_at NULLS FIRST,id LIMIT 10');
   const results=[];
   for(const connection of rows)results.push({id:connection.id,...await syncCalendar(connection.id)});

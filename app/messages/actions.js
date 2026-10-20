@@ -2,22 +2,27 @@
 import {redirect} from 'next/navigation';
 import {revalidatePath} from 'next/cache';
 import {requireUser} from '../../lib/auth';
-import {insertMessage,expireConversations} from '../../lib/messages.mjs';
+import {insertMessages,expireConversations} from '../../lib/messages.mjs';
+import {scheduleMessageEmails} from '../../lib/message-delivery';
 import {notifyMessageEmail} from '../../lib/message-email.mjs';
 import {query,transaction} from '../../lib/db.mjs';
 import {integer,text} from '../../lib/security.mjs';
 export async function sendMessage(form){
- const user=await requireUser();let recipient,body,key,messageId;
- try{recipient=integer(form.get('recipient_id'),1);body=text(form.get('message'),4000);key=String(form.get('message_key'));if(!body||recipient===user.id||!/^\w{8}-\w{4}-4\w{3}-[89ab]\w{3}-\w{12}$/i.test(key))throw new Error();}
- catch{redirect('/messages?erreur=Choisissez+un+destinataire+et+écrivez+un+message');}
+ const user=await requireUser();let recipients,all,body,key,deliveries;
+ try{
+  all=form.get('audience')==='all';
+  recipients=[...new Set((form.has('recipient_id')?[form.get('recipient_id')]:form.getAll('recipient_ids')).map(value=>integer(value,1)))];
+  body=text(form.get('message'),4000);key=String(form.get('message_key'));
+  if(!body||(!all&&!recipients.length)||!/^\w{8}-\w{4}-4\w{3}-[89ab]\w{3}-\w{12}$/i.test(key))throw new Error();
+ }catch{redirect('/messages?erreur=Choisissez+au+moins+un+destinataire+et+écrivez+un+message');}
  try{await transaction(async db=>{
-  messageId=await insertMessage(db,user,recipient,body,key);
-  if(messageId)await db.query('INSERT INTO audit(user_id,action) VALUES($1,$2)',[user.id,'Message envoyé #'+messageId]);
- });}catch{redirect('/messages?erreur=Message+non+envoyé');}
- let delivery='unchanged';
- if(messageId){try{delivery=await notifyMessageEmail({query},messageId,user.id);}catch{delivery='failed';}}
- revalidatePath('/messages');revalidatePath('/','layout');redirect('/messages?dest='+recipient+'&succes='+encodeURIComponent(delivery==='sent'?'Message envoyé et notification e-mail transmise.':delivery==='not_configured'?'Message envoyé dans le CRM. Gmail reste à connecter.':delivery==='failed'?'Message envoyé dans le CRM. Notification e-mail non confirmée.':'Message déjà enregistré.'));
-
+  deliveries=await insertMessages(db,user,{recipients,all},body,key);
+  if(deliveries.length)await db.query('INSERT INTO audit(user_id,action) VALUES($1,$2)',[user.id,'Message envoyé à '+deliveries.length+' collaborateur(s)']);
+ });}catch{redirect('/messages?erreur=Message+non+envoyé.+Vérifiez+les+destinataires+actifs.');}
+ if(deliveries.length)scheduleMessageEmails();
+ const destination=all?'/messages?':'/messages?dest='+recipients[0]+'&';
+ revalidatePath('/messages');revalidatePath('/','layout');
+ redirect(destination+'succes='+encodeURIComponent(deliveries.length?'Message enregistré. Les notifications e-mail sont mises en attente.':'Message déjà enregistré.'));
 }
 export async function readMessage(form){
  const user=await requireUser();let id;try{id=integer(form.get('message_id'),1);}catch{redirect('/messages');}

@@ -10,11 +10,11 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
  const db=new PGlite({extensions:{btree_gist}});
  const postgres=createServer(db);await new Promise(resolve=>postgres.listen(0,'127.0.0.1',resolve));
  const port=postgres.address().port,origin='http://127.0.0.1:3012';
- const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3012'],{env:{...process.env,DATABASE_URL:`postgresql://test:test@127.0.0.1:${port}/test`,NEXT_TELEMETRY_DISABLED:'1',FABI_SETUP_TOKEN:'installation-fictive-32-caracteres-minimum',CRON_SECRET:'cron-local-fictif-pour-les-tests'},stdio:['ignore','pipe','pipe']});
+ const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3012'],{env:{...process.env,DATABASE_URL:`postgresql://test:test@127.0.0.1:${port}/test`,NEXT_TELEMETRY_DISABLED:'1',FABI_SETUP_TOKEN:'installation-fictive-32-caracteres-minimum',CRON_SECRET:'cron-local-fictif-pour-les-tests',GMAIL_USER:'',GMAIL_APP_PASSWORD:''},stdio:['ignore','pipe','pipe']});
  let output='';server.stdout.on('data',d=>output+=d);server.stderr.on('data',d=>output+=d);
  let cookie='';const captured=new Map();
  async function get(path){return fetch(origin+path,{redirect:'manual',headers:{cookie}});}
- async function submit(path,marker,data){const page=await get(path);const html=await page.text();const forms=[...html.matchAll(/<form\b[^>]*>([\s\S]*?)<\/form>/g)].map(m=>m[1]);const form=forms.find(f=>f.includes('name="'+marker+'"'));assert.ok(form,'Formulaire absent : '+marker+' '+html.slice(0,120));const fields=new FormData();for(const match of form.matchAll(/<input[^>]*name="(\$ACTION_[^"]+)"([^>]*)>/g))fields.set(match[1],(match[2].match(/value="([^"]*)"/)?.[1]??'').replaceAll('&quot;','"').replaceAll('&amp;','&'));for(const [key,value] of Object.entries(data))fields.set(key,value);captured.set(marker,{path,fields:[...fields.entries()]});const response=await fetch(origin+path,{method:'POST',body:fields,redirect:'manual',headers:{cookie,origin}});const newCookie=response.headers.get('set-cookie');if(newCookie)cookie=newCookie.split(';')[0];assert.equal(response.status,303,'Échec action : '+await response.text()+'\n'+output+'\n'+form.slice(0,600));return response.headers.get('location');}
+ async function submit(path,marker,data){const page=await get(path);const html=await page.text();const forms=[...html.matchAll(/<form\b[^>]*>([\s\S]*?)<\/form>/g)].map(m=>m[1]);const form=forms.find(f=>f.includes('name="'+marker+'"'));assert.ok(form,'Formulaire absent : '+marker+' '+html.slice(0,120));const fields=new FormData();for(const match of form.matchAll(/<input[^>]*name="(\$ACTION_[^"]+)"([^>]*)>/g))fields.set(match[1],(match[2].match(/value="([^"]*)"/)?.[1]??'').replaceAll('&quot;','"').replaceAll('&amp;','&'));for(const [key,value] of Object.entries(data)){if(Array.isArray(value)){for(const item of value)fields.append(key,item);}else fields.set(key,value);}captured.set(marker,{path,fields:[...fields.entries()]});const response=await fetch(origin+path,{method:'POST',body:fields,redirect:'manual',headers:{cookie,origin}});const newCookie=response.headers.get('set-cookie');if(newCookie)cookie=newCookie.split(';')[0];assert.equal(response.status,303,'Échec action : '+await response.text()+'\n'+output+'\n'+form.slice(0,600));return response.headers.get('location');}
  try{
   let ready=false;for(let i=0;i<100;i++){try{if((await get('/connexion')).status===200){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,100));}assert.ok(ready,output);
   assert.equal((await get('/clients')).status,307);
@@ -152,13 +152,37 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.equal((await db.query('SELECT read_at FROM team_messages WHERE recipient_id=3')).rows[0].read_at,null);
   await submit('/messages?dest=1','message',{recipient_id:'1',message:'ÉCRIN est prêt, merci !',message_key:randomUUID()});
   assert.equal((await db.query('SELECT count(*)::int n FROM team_messages WHERE sender_id=2 AND recipient_id=1')).rows[0].n,1);
-  const rejected=await submit('/messages?dest=1','message',{recipient_id:'3',message:'Ne doit pas être envoyé',message_key:randomUUID()});
-  assert.match(rejected,/erreur=/);
+  const allowed=await submit('/messages?dest=1','message',{recipient_id:'3',message:'Message au responsable',message_key:randomUUID()});
+  assert.match(allowed,/succes=/);
+  assert.equal((await db.query("SELECT count(*)::int n FROM team_messages WHERE sender_id=2 AND body='Message au responsable'")).rows[0].n,2);
   cookie='';await submit('/connexion','email',{email:'admin@example.test',password:'UnMotDePasseFictif123!'});
   const discussion=await (await get('/messages?dest=2')).text();
   assert.match(discussion,/ÉCRIN est prêt/);assert.match(discussion,/Préparer ÉCRIN/);
   const history=discussion.slice(discussion.indexOf('class="conversation-history"'));
   assert.ok(history.indexOf('Préparer ÉCRIN pour le prochain voyageur</p>')<history.indexOf('ÉCRIN est prêt, merci !</p>'));
+  // The browser composer accepts many recipients for every role.
+  await db.query("INSERT INTO users(name,email,password,role) SELECT 'Autre employé','other@example.test',password,'employee' FROM users WHERE id=1");
+  cookie='';await submit('/connexion','email',{email:'manager@example.test',password:'UnMotDePasseFictif123!'});
+  const composer=await (await get('/messages')).text();
+  assert.match(composer,/name="audience"/);assert.match(composer,/Tous les collaborateurs actifs/);
+  const selectedKey=randomUUID();
+  assert.match(await submit('/messages','recipient_ids',{audience:'selected',recipient_ids:['2','4'],message:'Deux personnes choisies',message_key:selectedKey}),/succes=/);
+  assert.deepEqual((await db.query("SELECT recipient_id FROM team_messages WHERE dispatch_key=$1 ORDER BY recipient_id",[selectedKey])).rows.map(r=>r.recipient_id),[2,4]);
+  const broadcastKey=randomUUID();
+  await submit('/messages','recipient_ids',{audience:'all',message:'Annonce à toute l’équipe',message_key:broadcastKey});
+  assert.deepEqual((await db.query('SELECT recipient_id FROM team_messages WHERE dispatch_key=$1 ORDER BY recipient_id',[broadcastKey])).rows.map(r=>r.recipient_id),[1,2,4]);
+  await submit('/messages','recipient_ids',{audience:'all',message:'Annonce à toute l’équipe',message_key:broadcastKey});
+  assert.equal((await db.query('SELECT count(*)::int n FROM team_messages WHERE dispatch_key=$1',[broadcastKey])).rows[0].n,3);
+  const secretKey=randomUUID();
+  await submit('/messages','recipient_ids',{audience:'selected',recipient_ids:['4'],message:'Réservé au quatrième compte',message_key:secretKey});
+  cookie='';await submit('/connexion','email',{email:'employee@example.test',password:'UnMotDePasseFictif123!'});
+  assert.doesNotMatch(await (await get('/messages?dest=3')).text(),/Réservé au quatrième compte/);
+  const otherMessage=(await db.query('SELECT id FROM team_messages WHERE dispatch_key=$1',[secretKey])).rows[0].id;
+  await submit('/messages?dest=3','message_id',{message_id:String(otherMessage)});
+  assert.equal((await db.query('SELECT read_at FROM team_messages WHERE id=$1',[otherMessage])).rows[0].read_at,null);
+  const staffKey=randomUUID();
+  await submit('/messages','recipient_ids',{audience:'selected',recipient_ids:['4'],message:'Employé vers collègue et suivi',message_key:staffKey});
+  assert.deepEqual((await db.query('SELECT recipient_id,is_supervision FROM team_messages WHERE dispatch_key=$1 ORDER BY recipient_id',[staffKey])).rows,[{recipient_id:1,is_supervision:true},{recipient_id:3,is_supervision:true},{recipient_id:4,is_supervision:false}]);
   await db.exec("UPDATE team_messages SET created_at=NOW()-INTERVAL '8 days'");
   assert.ok([200,207].includes((await fetch(origin+'/api/calendars/sync',{headers:{authorization:'Bearer cron-local-fictif-pour-les-tests'}})).status));
   assert.equal((await db.query('SELECT count(*)::int n FROM team_messages')).rows[0].n,0);
