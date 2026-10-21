@@ -88,13 +88,12 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   const service={kind:'depense',staff_service:'1',activity:'Vérification',date:'2026-05-13',property_id:'1',provider:'Intervenant de test',quantity:'3',unit_amount:'2500',request_key:serviceKey,return_to:'/passages'};
   assert.match(await submit('/passages','request_key',service),/^\/passages\?/);
   const serviceRow=(await db.query('SELECT * FROM finance_entries WHERE request_key=$1',[serviceKey])).rows[0];
-  assert.equal(Number(serviceRow.amount),7500);assert.equal(serviceRow.staff_service,true);
+  assert.equal(Number(serviceRow.amount),7500);assert.equal(serviceRow.staff_service,true);assert.equal(serviceRow.payment_status,'Payé');
   assert.match(await (await get('/finances?annee=2026')).text(),/Passage de vérification/);
   await submit('/passages','request_key',service);
   assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries WHERE request_key=$1',[serviceKey])).rows[0].n,1);
   await db.query('DELETE FROM finance_entries WHERE request_key=$1',[serviceKey]);
   const cleaningId=(await db.query("SELECT id FROM finance_entries WHERE activity='Ménage'")).rows[0].id;
-  await submit('/passages','entry_id',{entry_id:String(cleaningId)});
   assert.equal((await db.query('SELECT payment_status FROM finance_entries WHERE id=$1',[cleaningId])).rows[0].payment_status,'Payé');
   const commission={kind:'commission',activity:'Chauffeur',date:'2026-05-12',property_id:'',description:'Transfert fictif',amount:'8000',provider:'Chauffeur fictif',request_key:randomUUID()};
   assert.match(await submit('/finances?onglet=commissions','request_key',commission),/succes=/);
@@ -112,6 +111,8 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(propertyDashboard,/Revenus mensuels de Appartement fictif/);
   const expenseSave=await submit('/depenses','request_key',{...commission,kind:'depense',activity:'Wifi',amount:'14900',request_key:randomUUID(),return_to:'/depenses',return_year:'2026',return_month:'5'});
   assert.match(expenseSave,/^\/depenses\?/);assert.match(expenseSave,/mois=5/);
+  assert.equal((await db.query("SELECT payment_status FROM finance_entries WHERE activity='Wifi'")).rows[0].payment_status,'Payé');
+  const expensesHtml=await (await get('/depenses?annee=2026')).text();assert.doesNotMatch(expensesHtml,/name="paid"|Marquer payé|Reste à payer|Déjà payé/);
   const ledger=await (await get('/finances?annee=2026')).text();assert.match(ledger,/class="operation-card"/);assert.match(ledger,/Détails de l’opération/);
   assert.doesNotMatch(ledger,/href="\/finances[^"]*onglet=depenses/);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM finance_entries')).rows[0].n,5);

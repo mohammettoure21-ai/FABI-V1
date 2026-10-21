@@ -16,6 +16,7 @@ test('Historique : mois comptable conservé, dates réelles seulement, aucun jou
 test('Retour après paiement : rubrique et filtres conservés, redirection externe refusée',()=>{
  const form=new FormData();for(const [name,value] of Object.entries({return_to:'/menage',return_year:'2026',return_month:'10',return_scope:'2'}))form.set(name,value);
  assert.equal(financeReturnUrl(form,{message:'Paiement noté'}),'/passages?annee=2026&mois=10&bien=2&succes=Paiement+not%C3%A9');
+ form.set('return_provider','Employé test');assert.equal(new URL(financeReturnUrl(form),'http://localhost').searchParams.get('intervenant'),'Employé test');
  form.set('return_to','https://malicious.invalid');
  assert.match(financeReturnUrl(form),/^\/finances\?/);
  form.set('return_month','99');assert.doesNotMatch(financeReturnUrl(form),/mois=/);

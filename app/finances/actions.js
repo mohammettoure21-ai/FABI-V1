@@ -37,7 +37,7 @@ export async function saveFinanceEntry(form) {
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestKey))throw new Error();
   entry={kind,activity,date,year,month,propertyId,quantity,unit,amount,description,requestKey,service,
    provider,detail:text(form.get('detail'),200),comment:text(form.get('comment'),1000),
-   paymentStatus:['depense','loyer'].includes(kind)?(form.get('paid')==='1'?'Payé':'À payer'):'Encaissé'};
+   paymentStatus:['depense','loyer'].includes(kind)?'Payé':'Encaissé'};
  }catch{redirect(financeReturnUrl(form,{message:'Vérifiez la date, le montant et les champs obligatoires',error:true}));}
  try {
   await transaction(async db=>{
@@ -50,18 +50,6 @@ export async function saveFinanceEntry(form) {
  }catch{redirect(financeReturnUrl(form,{message:'Écriture non enregistrée',error:true}));}
  refreshFinanceViews();
  redirect(financeReturnUrl(form,{fallback:entry.service?'/passages':['depense','loyer'].includes(entry.kind)?'/depenses':'/finances',year:entry.year,message:'Écriture enregistrée'}));
-}
-
-export async function markExpensePaid(form) {
- const user=await requireAdmin();
- let id;
- try{id=integer(form.get('entry_id'),1);}catch{redirect(financeReturnUrl(form,{message:'Écriture invalide',error:true}));}
- await transaction(async db=>{
-  const result=await db.query("UPDATE finance_entries SET payment_status='Payé' WHERE id=$1 AND kind IN ('depense','loyer') AND payment_status<>'Payé' RETURNING id",[id]);
-  if(result.rows.length)await recordActivity(db,user.id,'Paiement écriture financière '+id);
- });
- refreshFinanceViews();
- redirect(financeReturnUrl(form,{message:'Paiement noté, sans nouvelle dépense'}));
 }
 
 export async function saveMonthlyRent(form) {
