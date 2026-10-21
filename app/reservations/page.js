@@ -1,3 +1,4 @@
+import ArrivalAlerts from './arrival-alerts';
 import Link from 'next/link';
 import ReservationCalendar from './reservation-calendar';
 import StayList from './stay-list';
@@ -30,6 +31,7 @@ export default async function Reservations({searchParams}) {
  const editAmount=edit?stayAmount(edit):null;
  return <><Header eyebrow="ORGANISATION DES SÉJOURS" title="Réservations" description="Votre calendrier et vos séjours."/><Messages params={params}/>
  {canWrite&&<div className="list-actions"><a className="button" href="#nouvelle-reservation">+ Ajouter une réservation</a>{manager&&<a className="button secondary" href="#calendriers">Airbnb / Booking</a>}</div>}
+ <ArrivalAlerts/>
  <ReservationCalendar key={calYear+'-'+calMonth+'-'+String(params.cal_bien??'')+'-'+String(params.cal_vue??'')} properties={properties.rows.map(p=>({id:p.id,name:p.name,nightly:manager?p.nightly:null}))} stays={calendarRows.rows.map(({nightly,agreed_total,...stay})=>manager?{...stay,nightly,agreed_total}:stay)} year={calYear} month={calMonth} initialPropertyId={properties.rows.find(p=>p.id===Number(params.cal_bien))?.id} initialView={params.cal_vue==='year'?'year':'month'} canEdit={canWrite} showPrices={manager} today={now.toISOString().slice(0,10)}/>
  {edit&&<section className="panel stay-edit-panel" id="modifier-sejour"><h2>Modifier le séjour · {edit.property||'Appartement à préciser'}</h2><p>{edit.guest_label||'Inconnu'} · {edit.source} · {editAmount===null?'Prix à renseigner':money(editAmount)}</p>
  <form action={updateStay} className="grid-form"><input type="hidden" name="stay_id" value={edit.id}/><Input label="Arrivée" name="edit_arrival" type="date" defaultValue={edit.arrival}/><Input label="Départ" name="edit_departure" type="date" defaultValue={edit.departure}/>

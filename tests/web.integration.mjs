@@ -42,7 +42,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.ok(propertiesPage.indexOf('Les appartements')<propertiesPage.indexOf('Ajouter un appartement'));
   assert.equal((await get('/api/calendars/sync')).status,401);
   const cron=await fetch(origin+'/api/calendars/sync',{headers:{authorization:'Bearer cron-local-fictif-pour-les-tests'}});
-  assert.equal(cron.status,200);assert.deepEqual(await cron.json(),{expenses:{created:0,reused:0},synchronized:0,failed:0});
+  assert.equal(cron.status,200);assert.deepEqual(await cron.json(),{expenses:{created:0,reused:0},reminders:{queued:0},synchronized:0,failed:0});
   assert.match(await submit('/reservations','calendar_property_id',{calendar_property_id:'1',provider:'Airbnb',calendar_url:'https://127.0.0.1/calendar/ical/fake.ics'}),/erreur=/);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM calendar_connections')).rows[0].n,0);
   await db.exec("INSERT INTO finance_imports(fingerprint,filename,reporting_year,source_data,notes) VALUES('fake','fictif.xlsx',2026,'{}','[\"Contrôle fictif\"]'); INSERT INTO finance_entries(import_id,property_id,kind,reporting_year,reporting_month,description,amount,source_sheet,source_row) VALUES(1,1,'recette',2026,5,'Recette fictive',1000,'Test',1),(1,1,'loyer',2026,5,'Loyer fictif',300,'Test',2)");

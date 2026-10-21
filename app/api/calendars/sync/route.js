@@ -1,3 +1,4 @@
+import {queueArrivalReminders} from '../../../../lib/reservation-reminders.mjs';
 import {scheduleMessageEmails} from '../../../../lib/message-delivery';
 import {scheduleActivityEmails} from '../../../../lib/activity';
 import {timingSafeEqual} from 'node:crypto';
@@ -19,6 +20,7 @@ export async function GET(request) {
   const {rows}=await query('SELECT id FROM calendar_connections WHERE active=TRUE ORDER BY last_attempt_at NULLS FIRST,id LIMIT 10');
   const results=[];
   for(const connection of rows)results.push({id:connection.id,...await syncCalendar(connection.id)});
-  return Response.json({expenses,synchronized:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length},{status:results.some(r=>!r.ok)?207:200});
+  const reminders=await transaction(queueArrivalReminders);
+  return Response.json({expenses,reminders,synchronized:results.filter(r=>r.ok).length,failed:results.filter(r=>!r.ok).length},{status:results.some(r=>!r.ok)?207:200});
  }catch{console.error('FABI_CALENDAR_CRON_FAILED');return Response.json({error:'Synchronization failed'},{status:500});}
 }

@@ -110,6 +110,18 @@ test('Navigateur : conversations sans retour au formulaire, historique lisible e
   assert.equal((await db.query('SELECT count(*)::int n FROM users')).rows[0].n,accountCount);
   await page.locator('select[name="type"]').selectOption('owner');await page.getByRole('button',{name:'Rechercher',exact:true}).click();await page.waitForURL(/type=owner/);
   assert.match(await page.locator('tbody').innerText(),/Propriétaire contact navigateur/);assert.doesNotMatch(await page.locator('tbody').innerText(),/Partenaire navigateur fictif/);
+  const arrival=new Date();arrival.setUTCDate(arrival.getUTCDate()+2);const departure=new Date(arrival);departure.setUTCDate(departure.getUTCDate()+1);
+  await db.query("INSERT INTO reservations(property_id,arrival,departure,status,source,assigned_to,guest_label) VALUES(1,$1,$2,'Confirmée','Direct',1,'Voyageur fictif du rappel')",[arrival.toISOString().slice(0,10),departure.toISOString().slice(0,10)]);
+  await page.goto(origin+'/');const alerts=page.getByRole('region',{name:'Rappels d’arrivée'});await alerts.waitFor();
+  assert.match(await alerts.innerText(),/Dans 2 jours/);assert.match(await alerts.innerText(),/Appartement de test/);
+  await page.reload();await alerts.waitFor();
+  assert.equal((await db.query('SELECT count(*)::int n FROM reservation_reminders')).rows[0].n,1);
+  assert.equal((await db.query('SELECT count(*)::int n FROM activity_email_deliveries d JOIN reservation_reminders r ON r.audit_id=d.audit_id')).rows[0].n,3);
+  await page.getByRole('button',{name:'Se déconnecter',exact:true}).click();await page.waitForURL(/connexion/);
+  await page.getByLabel('Adresse e-mail',{exact:true}).fill('employee@example.test');await page.getByLabel('Mot de passe',{exact:true}).fill('UnMotDePasseFictif123!');
+  await page.getByRole('button',{name:/Se connecter/}).click();await page.waitForURL(origin+'/');await alerts.waitFor();
+  await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
+  await page.screenshot({path:'/tmp/fabi-ui-rappel-arrivee.png',fullPage:true});
   assert.deepEqual(errors,[]);
  }catch(error){await page?.screenshot({path:'/tmp/fabi-ui-failure.png',fullPage:true});throw error;}finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));postgres.close();await db.close();}
 });
