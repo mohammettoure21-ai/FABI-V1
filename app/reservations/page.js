@@ -19,7 +19,7 @@ export default async function Reservations({searchParams}) {
  const parsedEditId=/^\d+$/.test(String(params.modifier??''))?Number(params.modifier):null;
  const editId=Number.isSafeInteger(parsedEditId)&&parsedEditId>0&&parsedEditId<=2147483647?parsedEditId:null;
  const [clients,properties,reservations,connections,calendarRows,editing]=await Promise.all([
-  query("SELECT id,name FROM clients WHERE ($1<>'employee' OR assigned_to=$2) ORDER BY name",[user.role,user.id]),
+  query("SELECT id,name FROM clients WHERE contact_type='client' AND ($1<>'employee' OR assigned_to=$2) ORDER BY name",[user.role,user.id]),
   query("SELECT id,name,nightly FROM properties WHERE status='Disponible' ORDER BY name"),
   query("SELECT r.*,c.name AS client,p.name AS property,cc.active AS calendar_active,COALESCE(r.agreed_total,(r.departure-r.arrival)::bigint*r.nightly) AS amount FROM reservations r LEFT JOIN clients c ON c.id=r.client_id LEFT JOIN properties p ON p.id=r.property_id LEFT JOIN calendar_connections cc ON cc.id=r.calendar_connection_id ORDER BY (r.status<>'Annulée') DESC,r.arrival DESC LIMIT 1000"),
   canWrite?query('SELECT c.id,c.provider,c.active,c.last_sync_at,c.last_error,c.last_event_count,c.last_conflict_count,p.name AS property FROM calendar_connections c JOIN properties p ON p.id=c.property_id ORDER BY p.name,c.provider'):Promise.resolve({rows:[]}),

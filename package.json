@@ -9,7 +9,8 @@
     "test": "node --test tests/*.test.mjs",
     "db:init": "node --env-file-if-exists=.env.local scripts/init-db.mjs",
     "admin:create": "node --env-file-if-exists=.env.local scripts/create-admin.mjs",
-    "test:web": "npm run build && node --test tests/web.integration.mjs"
+    "test:web": "npm run build && node --test tests/web.integration.mjs",
+    "test:ui": "npm run build && node --test tests/ui.integration.mjs"
   },
   "dependencies": {
     "next": "^16.0.0",
@@ -20,7 +21,8 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.14",
-    "pglite-server": "^0.1.5"
+    "pglite-server": "^0.1.5",
+    "playwright-core": "^1.64.1"
   },
   "engines": {
     "node": ">=22"

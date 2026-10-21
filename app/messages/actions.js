@@ -22,12 +22,12 @@ export async function sendMessage(form){
  if(deliveries.length)scheduleMessageEmails();
  const destination=all?'/messages?':'/messages?dest='+recipients[0]+'&';
  revalidatePath('/messages');revalidatePath('/','layout');
- redirect(destination+'succes='+encodeURIComponent(deliveries.length?'Message enregistré. Les notifications e-mail sont mises en attente.':'Message déjà enregistré.'));
+ redirect(destination+'succes='+encodeURIComponent(deliveries.length?'Message enregistré. Les notifications e-mail sont mises en attente.':'Message déjà enregistré.')+'#conversation');
 }
 export async function readMessage(form){
  const user=await requireUser();let id;try{id=integer(form.get('message_id'),1);}catch{redirect('/messages');}
  const peer=await transaction(async db=>{await expireConversations(db);return (await db.query(`UPDATE team_messages SET read_at=COALESCE(read_at,NOW()) WHERE id=$1 AND recipient_id=$2 AND EXISTS(SELECT 1 FROM users v JOIN users s ON s.id=team_messages.sender_id WHERE v.id=$2 AND (v.role<>'owner' OR s.role='admin')) RETURNING sender_id`,[id,user.id])).rows[0]?.sender_id;});
- revalidatePath('/messages');revalidatePath('/','layout');redirect(peer?'/messages?dest='+peer:'/messages');
+ revalidatePath('/messages');revalidatePath('/','layout');redirect(peer?'/messages?dest='+peer+'#conversation':'/messages');
 }
 
 export async function retryMessageEmail(form){
@@ -41,7 +41,7 @@ export async function readSupervisedMessage(form){
  const user=await requireUser();let id,employee,peer;
  try{id=integer(form.get('observed_message_id'),1);employee=integer(form.get('employee_id'),1);peer=integer(form.get('peer_id'),1);}catch{redirect('/messages');}
  await transaction(async db=>{await expireConversations(db);await readObservedMessage(db,user,id);});
- revalidatePath('/messages');revalidatePath('/','layout');redirect('/messages?employee='+employee+'&peer='+peer);
+ revalidatePath('/messages');revalidatePath('/','layout');redirect('/messages?employee='+employee+'&peer='+peer+'#conversation');
 }
 export async function retrySupervisedEmail(form){
  const user=await requireUser();let id;

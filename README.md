@@ -87,7 +87,7 @@ Les biens importés dont les chambres et le tarif sont inconnus gardent des vale
 
 Une réservation peut être créée sans fiche client ni appartement : nom libre, agent, source Airbnb/Booking/Agent et appartement libre sont facultatifs. Aucun faux contact n’est créé. Les dates, voyageurs et prix restent contrôlés. La contrainte de chevauchement s’applique aux appartements liés ; un séjour sans bien ne bloque pas le calendrier.
 
-Dans Finances & loyers, les onglets Commissions FABI, Dépenses et Ménage permettent la saisie par activité avec appartement facultatif. Chaque passage de ménage vaut 5 000 FCFA et crée une seule dépense. Le récapitulatif groupe les passages par mois, appartement et ménagère. Marquer payé met à jour le statut sans créer de nouvelle dépense. Le résultat global compte les dépenses dues ; il ne représente pas la trésorerie encaissée. Les agrégats historiques « ménage et achats » ne sont pas transformés en passages.
+Finances conserve le bilan, les recettes et les commissions FABI. Les rubriques Dépenses et Employés / passages sont accessibles séparément, en bas du menu de gauche, avec un appartement facultatif. Chaque passage indique le service (Ménage, Vérification ou Autre service), le nom de l’intervenant, la quantité et le prix unitaire librement saisi. Il crée une seule dépense. Les anciens montants de ménage restent conservés. Le récapitulatif groupe les passages par mois, appartement, intervenant et service. Marquer payé met à jour le statut sans créer de nouvelle dépense. Le résultat global compte les dépenses dues ; il ne représente pas la trésorerie encaissée. Les agrégats historiques « ménage et achats » ne sont pas transformés en passages.
 
 Le build exécute `scripts/migrate-db.mjs` avant compilation : la migration additive et idempotente utilise la même connexion que le déploiement, sans document financier dans le dépôt. Sans configuration de base, le build local ignore cette étape.
 
@@ -156,3 +156,22 @@ Le bien est déterminé par le compte authentifié dans chaque requête, jamais 
 La messagerie du propriétaire propose seulement les administrateurs. Les employés et responsables ne peuvent pas envoyer à un propriétaire, même en forgeant une requête. Les comptes propriétaires sont exclus des notifications générales ; seules leurs notifications de messages adressés par un administrateur sont prévues. La réaffectation d’un appartement ou l’ajout de plusieurs appartements par propriétaire ne disposent pas encore d’interface dédiée.
 
 La carte « À venir · FABI » est retirée de l’aperçu général. Le prévisionnel des appartements reste disponible.
+
+
+## Navigation des conversations et historique financier
+
+L’ouverture d’une conversation place la discussion à l’écran et montre les derniers messages, sans déployer le formulaire « Nouveau message ». Celui-ci et les règles de confidentialité sont repliés par défaut. Un rafraîchissement automatique conserve la position de lecture ; les nouveaux messages ne font défiler l’historique que si l’utilisateur était déjà près de sa fin. Les liens de suivi, retours après envoi et pagination ciblent la conversation.
+
+Les pages `/depenses` et `/passages` lisent et modifient le registre `finance_entries` existant : aucun transfert ni copie de données n’est effectué. Dépenses présente les dépenses générales et les loyers ; Employés / passages présente les prestations identifiées comme passages. Les anciens passages de ménage dont le prix unitaire est connu sont identifiés sans modifier leur montant. Les achats et agrégats historiques restent des dépenses générales. L’ancienne adresse `/menage` redirige vers `/passages`. Les deux restent comptés une seule fois dans les charges du bilan, du tableau de bord et des vues propriétaire. Les anciennes adresses `/finances?onglet=depenses` et `/finances?onglet=menage` redirigent vers la rubrique correspondante avec les filtres conservés.
+
+Les historiques sont présentés en cartes groupées par période comptable, avec une date, une description, un appartement, un montant et un statut. « Détails de l’opération » révèle les commentaires, intervenants, dates originales et références de source. Une ligne historique sans jour précis reste mensuelle : aucun premier du mois n’est inventé. « Marquer payé » modifie le statut de la même écriture, sans ajouter de dépense, et conserve la rubrique et les filtres actifs.
+
+L’administrateur peut saisir et régler les dépenses et passages des employés. Les responsables disposent d’une consultation seule ; employés et propriétaires n’accèdent pas à ces registres généraux. L’espace propriétaire conserve uniquement les finances de son appartement.
+
+Vérification visuelle automatisée : `npm run test:ui` compile puis utilise Chromium, PostgreSQL embarqué et des comptes fictifs pour vérifier le défilement, les cartes, les filtres, les paiements sans doublons et l’affichage mobile. Le test nécessite Chromium installé ; `CHROMIUM_PATH` peut indiquer son exécutable (par défaut `/usr/bin/chromium`). Aucun navigateur n’est requis pour héberger le site sur Vercel. Les captures de test restent dans `/tmp`, hors du dépôt.
+
+## Clients et partenaires
+
+La rubrique est placée tout en bas du menu. À la création, choisissez Client, Propriétaire ou Partenaire — apporteur de clients. La recherche peut être filtrée par type ; les étapes commerciales concernent les clients. Les anciens contacts sont conservés avec le type Client. Les réservations proposent uniquement les contacts de type Client.
+
+Une fiche Propriétaire ne crée pas de compte de connexion : les accès au portail propriétaire se gèrent séparément dans Équipe & accès. Une fiche Partenaire ne génère pas de commission automatique. Les droits et restrictions des employés sur leurs contacts restent appliqués.
