@@ -1,4 +1,5 @@
 'use server';
+import {createRecurringWifi,generateRecurringExpenses} from '../../lib/recurring-expenses.mjs';
 import {recordActivity,scheduleActivityEmails} from '../../lib/activity';
 import {revalidatePath} from 'next/cache';
 import {reviewStayPayment} from '../../lib/stay-payment.mjs';
@@ -12,6 +13,7 @@ function refreshFinanceViews(){for(const path of ['/','/finances','/depenses','/
 
 export async function saveFinanceEntry(form) {
  const user=await requireAdmin();
+ if(form.get('recurring_wifi')==='1')return saveRecurringWifi(form,user);
  let entry;
  try {
   const kind=text(form.get('kind'),20);
@@ -49,7 +51,7 @@ export async function saveFinanceEntry(form) {
   });
  }catch{redirect(financeReturnUrl(form,{message:'Écriture non enregistrée',error:true}));}
  refreshFinanceViews();
- redirect(financeReturnUrl(form,{fallback:entry.service?'/passages':['depense','loyer'].includes(entry.kind)?'/depenses':'/finances',year:entry.year,message:'Écriture enregistrée'}));
+ redirect(financeReturnUrl(form,{fallback:['depense','loyer'].includes(entry.kind)?'/depenses':'/finances',year:entry.year,message:'Écriture enregistrée'}));
 }
 
 export async function saveMonthlyRent(form) {
@@ -78,4 +80,32 @@ export async function confirmStayPayment(form) {
  catch(error){redirect('/finances?erreur='+encodeURIComponent(error.message==='MISSING_PRICE'?'Ajoutez d’abord le prix du séjour.':'Ce séjour ne peut pas être encaissé.'));}
  refreshFinanceViews();revalidatePath('/reservations');
  redirect('/finances?succes='+encodeURIComponent(received?'Encaissement enregistré une seule fois.':'Paiement noté non reçu. Vous pourrez le confirmer plus tard.'));
+}
+
+async function saveRecurringWifi(form,user){
+ let data;
+ try{
+  if(form.get('kind')!=='depense'||form.get('activity')!=='Wifi')throw new Error();
+  const date=text(form.get('date'),10);
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||new Date(date).toISOString().slice(0,10)!==date)throw new Error();
+  integer(date.slice(0,4),2000,2200);
+  const requestKey=text(form.get('request_key'),36),description=text(form.get('description'),200);
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestKey)||!description)throw new Error();
+  const propertyIds=[...new Set(form.getAll('property_ids').map(value=>value==='fabi'?null:integer(value,1,2147483647)))];
+  if(!propertyIds.length||propertyIds.length>100)throw new Error();
+  data={date,requestKey,description,propertyIds,amount:integer(form.get('amount'),1),userId:user.id};
+ }catch{redirect(financeReturnUrl(form,{fallback:'/depenses',message:'Vérifiez la date, le montant et les appartements sélectionnés.',error:true}));}
+ try{await transaction(db=>createRecurringWifi(db,data));}
+ catch(error){redirect(financeReturnUrl(form,{fallback:'/depenses',message:error.message==='WIFI_ALREADY_ACTIVE'?'Un Wi-Fi mensuel est déjà actif pour cet appartement. Arrêtez-le avant de le remplacer.':'Dépense mensuelle non enregistrée. Aucun ajout effectué.',error:true}));}
+ refreshFinanceViews();redirect(financeReturnUrl(form,{fallback:'/depenses',message:'Wi-Fi mensuel activé pour les appartements sélectionnés.'}));
+}
+export async function stopRecurringExpense(form){
+ const user=await requireAdmin();let id;
+ try{id=integer(form.get('rule_id'),1);}catch{redirect('/depenses?erreur=Règle+invalide');}
+ await transaction(async db=>{
+  await generateRecurringExpenses(db);
+  const changed=await db.query('UPDATE recurring_expenses SET active=FALSE WHERE id=$1 AND active RETURNING id',[id]);
+  if(changed.rows.length)await recordActivity(db,user.id,'Arrêt Wi-Fi mensuel '+id);
+ });
+ refreshFinanceViews();redirect('/depenses?succes=Wi-Fi+mensuel+arrêté.+Les+dépenses+déjà+enregistrées+sont+conservées.');
 }

@@ -1,2 +1,4 @@
-import FinanceWorkspace from '../finances/workspace';
-export default async function StaffServices({searchParams}){return <FinanceWorkspace params={await searchParams} section="passages"/>;}
+import {redirect} from 'next/navigation';
+import {requireStaff} from '../../lib/auth';
+import {financeLegacyUrl} from '../../lib/finance-navigation.mjs';
+export default async function LegacyPassages({searchParams}){await requireStaff();redirect(financeLegacyUrl(await searchParams,'/depenses'));}

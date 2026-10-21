@@ -6,7 +6,7 @@ export default async function Finances({searchParams}){
  const params=await searchParams;
  if(['depenses','menage'].includes(params.onglet)){
   await requireStaff();
-  redirect(financeLegacyUrl(params,params.onglet==='menage'?'/passages':'/depenses'));
+  redirect(financeLegacyUrl(params,params.onglet==='menage'?'/depenses':'/depenses'));
  }
  return <FinanceWorkspace params={params}/>;
 }

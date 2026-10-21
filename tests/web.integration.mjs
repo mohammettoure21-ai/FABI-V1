@@ -42,7 +42,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.ok(propertiesPage.indexOf('Les appartements')<propertiesPage.indexOf('Ajouter un appartement'));
   assert.equal((await get('/api/calendars/sync')).status,401);
   const cron=await fetch(origin+'/api/calendars/sync',{headers:{authorization:'Bearer cron-local-fictif-pour-les-tests'}});
-  assert.equal(cron.status,200);assert.deepEqual(await cron.json(),{synchronized:0,failed:0});
+  assert.equal(cron.status,200);assert.deepEqual(await cron.json(),{expenses:{created:0,reused:0},synchronized:0,failed:0});
   assert.match(await submit('/reservations','calendar_property_id',{calendar_property_id:'1',provider:'Airbnb',calendar_url:'https://127.0.0.1/calendar/ical/fake.ics'}),/erreur=/);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM calendar_connections')).rows[0].n,0);
   await db.exec("INSERT INTO finance_imports(fingerprint,filename,reporting_year,source_data,notes) VALUES('fake','fictif.xlsx',2026,'{}','[\"Contrôle fictif\"]'); INSERT INTO finance_entries(import_id,property_id,kind,reporting_year,reporting_month,description,amount,source_sheet,source_row) VALUES(1,1,'recette',2026,5,'Recette fictive',1000,'Test',1),(1,1,'loyer',2026,5,'Loyer fictif',300,'Test',2)");
@@ -74,23 +74,24 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(reservationPage,/Calendriers Airbnb/);
   assert.ok(reservationPage.indexOf('Calendrier des réservations')<reservationPage.indexOf('Vos réservations'));
   assert.match(reservationPage,/stay-bar/);
+  assert.equal((await get('/passages?annee=2026&mois=5')).headers.get('location'),'/depenses?annee=2026&mois=5');
   const cleaningKey=randomUUID();
   const cleaning={kind:'depense',cleaning:'1',date:'2026-05-11',property_id:'1',provider:'Ménagère fictive',quantity:'1',request_key:cleaningKey};
-  assert.match(await submit('/passages','request_key',cleaning),/succes=/);
-  assert.match(await submit('/passages','request_key',cleaning),/succes=/);
+  assert.match(await submit('/depenses','request_key',cleaning),/succes=/);
+  assert.match(await submit('/depenses','request_key',cleaning),/succes=/);
   assert.equal((await db.query("SELECT count(*)::int AS n FROM finance_entries WHERE activity='Ménage'")).rows[0].n,1);
   assert.equal(Number((await db.query("SELECT amount FROM finance_entries WHERE activity='Ménage'")).rows[0].amount),5000);
-  assert.match(await (await get('/passages')).text(),/Ménagère fictive/);
+  assert.match(await (await get('/depenses')).text(),/Ménagère fictive/);
   assert.match(await (await get('/finances?annee=2026')).text(),/Ménagère fictive/);
   const legacy=await get('/finances?onglet=menage&annee=2026&mois=5&bien=1');
-  assert.equal(legacy.status,307);assert.equal(legacy.headers.get('location'),'/passages?annee=2026&mois=5&bien=1');
+  assert.equal(legacy.status,307);assert.equal(legacy.headers.get('location'),'/depenses?annee=2026&mois=5&bien=1');
   const serviceKey=randomUUID();
-  const service={kind:'depense',staff_service:'1',activity:'Vérification',date:'2026-05-13',property_id:'1',provider:'Intervenant de test',quantity:'3',unit_amount:'2500',request_key:serviceKey,return_to:'/passages'};
-  assert.match(await submit('/passages','request_key',service),/^\/passages\?/);
+  const service={kind:'depense',staff_service:'1',activity:'Vérification',date:'2026-05-13',property_id:'1',provider:'Intervenant de test',quantity:'3',unit_amount:'2500',request_key:serviceKey,return_to:'/depenses'};
+  assert.match(await submit('/depenses','request_key',service),/^\/depenses\?/);
   const serviceRow=(await db.query('SELECT * FROM finance_entries WHERE request_key=$1',[serviceKey])).rows[0];
   assert.equal(Number(serviceRow.amount),7500);assert.equal(serviceRow.staff_service,true);assert.equal(serviceRow.payment_status,'Payé');
   assert.match(await (await get('/finances?annee=2026')).text(),/Passage de vérification/);
-  await submit('/passages','request_key',service);
+  await submit('/depenses','request_key',service);
   assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries WHERE request_key=$1',[serviceKey])).rows[0].n,1);
   await db.query('DELETE FROM finance_entries WHERE request_key=$1',[serviceKey]);
   const cleaningId=(await db.query("SELECT id FROM finance_entries WHERE activity='Ménage'")).rows[0].id;
@@ -143,7 +144,15 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.equal((await db.query('SELECT count(*)::int n FROM team_messages')).rows[0].n,1);
   await submit('/messages','message',{recipient_id:'3',message:'Message réservé au responsable',message_key:randomUUID()});
   assert.equal((await db.query('SELECT count(*)::int n FROM activity_email_deliveries')).rows[0].n,activityBeforeMessages);
-  const forbidden=['client_id','stay_id','restore_dates','request_key','entry_id','monthly_rent','payment_stay_id','calendar_property_id'].map(key=>captured.get(key)).filter(Boolean);
+  const recurring={kind:'depense',activity:'Wifi',recurring_wifi:'1',date:'2200-01-01',amount:'14900',description:'Wi-Fi abonnement de test',property_ids:['1'],request_key:randomUUID(),return_to:'/depenses'};
+  assert.match(await submit('/depenses','request_key',recurring),/succes=/);
+  assert.match(await submit('/depenses','request_key',recurring),/succes=/);
+  assert.equal((await db.query('SELECT count(*)::int n FROM recurring_expenses')).rows[0].n,1);
+  assert.match(await submit('/depenses','request_key',{...recurring,request_key:randomUUID()}),/erreur=/);
+  assert.equal((await get('/api/calendars/sync')).status,401);
+  await submit('/depenses','rule_id',{rule_id:'1'});
+  assert.equal((await db.query('SELECT active FROM recurring_expenses WHERE id=1')).rows[0].active,false);
+  const forbidden=['client_id','stay_id','restore_dates','request_key','entry_id','monthly_rent','payment_stay_id','calendar_property_id','rule_id'].map(key=>captured.get(key)).filter(Boolean);
   const before=JSON.stringify((await db.query('SELECT (SELECT count(*) FROM reservations) AS stays,(SELECT count(*) FROM finance_entries) AS entries,(SELECT count(*) FROM audit WHERE action<>$$Connexion$$) AS audits')).rows);
   for(const role of ['manager','employee']){
    cookie='';await submit('/connexion','email',{email:role+'@example.test',password:'UnMotDePasseFictif123!'});
@@ -159,7 +168,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
    if(role==='manager'){
     const finance=await (await get('/finances')).text();assert.match(finance,/Consultation des recettes/);
     assert.doesNotMatch(finance,/name="request_key"|name="entry_id"|name="payment_stay_id"|name="monthly_rent"/);
-    for(const path of ['/depenses','/passages']){const section=await get(path);assert.equal(section.status,200);assert.doesNotMatch(await section.text(),/name="request_key"|name="entry_id"/);}
+    for(const path of ['/depenses']){const section=await get(path);assert.equal(section.status,200);assert.doesNotMatch(await section.text(),/name="request_key"|name="entry_id"/);}
    }
    for(const action of forbidden){const body=new FormData();for(const [key,value] of action.fields)body.set(key,value);const response=await fetch(origin+action.path,{method:'POST',body,redirect:'manual',headers:{cookie,origin}});assert.equal(response.status,500,'Action interdite acceptée pour '+role+' '+action.path);}
   }
@@ -167,7 +176,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   cookie='';await submit('/connexion','email',{email:'employee@example.test',password:'UnMotDePasseFictif123!'});
   assert.equal((await get('/equipe')).status,307);
   assert.equal((await get('/finances')).status,307);
-  assert.equal((await get('/depenses')).status,307);assert.equal((await get('/passages')).status,307);
+  assert.equal((await get('/depenses')).status,307);assert.equal((await get('/depenses')).status,307);
   assert.doesNotMatch(await (await get('/')).text(),/Revenus FABI|Revenus mensuels de FABI/);
   assert.doesNotMatch(await (await get('/clients')).text(),/Client fictif/);
   assert.match(await (await get('/reservations')).text(),/Client fictif/);
@@ -237,7 +246,7 @@ test('Site complet : connexion, contacts, appartements, réservations et droits 
   assert.match(ownerPortal,/Appartement fictif/);assert.match(ownerPortal,/Calendrier des réservations/);assert.match(ownerPortal,/Solde d’exploitation/);
   assert.doesNotMatch(ownerPortal,/Autre appartement confidentiel|Recette privée autre appartement|Commission interne confidentielle|Client fictif/);
   assert.doesNotMatch(ownerPortal,/href="\/(clients|appartements|reservations|finances|depenses|menage|equipe)"/);
-  for(const path of ['/','/clients','/appartements','/reservations','/finances','/depenses','/passages','/equipe'])assert.equal((await get(path)).status,307);
+  for(const path of ['/','/clients','/appartements','/reservations','/finances','/depenses','/depenses','/equipe'])assert.equal((await get(path)).status,307);
   const ownerMessages=await (await get('/messages')).text();assert.match(ownerMessages,/Message privé au propriétaire/);
   assert.doesNotMatch(ownerMessages,/Responsable fictif|ÉCRIN est prêt|Discussion privée entre encadrants|Suivi des employés/);
   assert.equal((await get('/messages?employee=2&peer=1')).status,404);

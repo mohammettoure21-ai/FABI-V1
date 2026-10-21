@@ -13,7 +13,7 @@ export default function Navigation({role,unread=0}) {
  if(role==='admin')links.push(['/equipe','Équipe & accès']);
  const item=([href,label])=><Link key={href} href={href} aria-current={(href==='/'?pathname==='/':pathname.startsWith(href))?'page':undefined}>{label}</Link>;
  const secondary=[];
- if(['admin','manager'].includes(role))secondary.push(['/depenses','Dépenses'],['/passages','Employés / passages']);
+ if(['admin','manager'].includes(role))secondary.push(['/depenses','Dépenses']);
  if(role!=='owner')secondary.push(['/clients','Clients et partenaires']);
  return <nav className="sidebar-navigation" aria-label="Navigation principale"><div className="nav-primary">{links.map(item)}</div>{secondary.length>0&&<div className="nav-operations" aria-label="Gestion quotidienne"><span>GESTION QUOTIDIENNE</span>{secondary.map(item)}</div>}</nav>;
 }

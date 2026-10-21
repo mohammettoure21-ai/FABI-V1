@@ -2,7 +2,7 @@ import {money} from '../../lib/security.mjs';
 import {months,kinds} from '../../lib/finance.mjs';
 import {financeEntryDate,financeHistoryGroups} from '../../lib/finance-history.mjs';
 import {Empty} from '../components';
-export function FinanceReturnFields({context={}}){return <><input type="hidden" name="return_to" value={context.path??'/finances'}/><input type="hidden" name="return_year" value={context.year??''}/><input type="hidden" name="return_month" value={context.month??''}/><input type="hidden" name="return_scope" value={context.scope??''}/><input type="hidden" name="return_tab" value={context.tab??''}/><input type="hidden" name="return_provider" value={context.provider??''}/></>;}
+export function FinanceReturnFields({context={}}){return <><input type="hidden" name="return_to" value={context.path??'/finances'}/><input type="hidden" name="return_year" value={context.year??''}/><input type="hidden" name="return_month" value={context.month??''}/><input type="hidden" name="return_scope" value={context.scope??''}/><input type="hidden" name="return_tab" value={context.tab??''}/><input type="hidden" name="return_activity" value={context.activity??''}/><input type="hidden" name="return_provider" value={context.provider??''}/></>;}
 export default function EntryHistory({entries}){
  if(!entries.length)return <Empty text="Aucune opération sur cette période."/>;
  return <div className="operation-history">{financeHistoryGroups(entries).map(group=><section className="operation-group" key={group.key}><h3>{months[group.month-1]} {group.year}</h3>{group.entries.map(entry=>{

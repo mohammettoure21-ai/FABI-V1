@@ -1,5 +1,5 @@
 import {requireStaff} from '../lib/auth';
-import {query} from '../lib/db.mjs';
+import {query,syncRecurringExpenses} from '../lib/db.mjs';
 import {money} from '../lib/security.mjs';
 import {projectedRevenue} from '../lib/stay.mjs';
 import {scopeRevenue} from '../lib/dashboard.mjs';
@@ -7,6 +7,7 @@ import RevenueChart from './revenue-chart';
 import Link from 'next/link';
 export default async function Dashboard({searchParams}) {
  const user=await requireStaff();
+ if(user.role!=='employee')await syncRecurringExpenses();
  const params=await searchParams;
  const now=new Date(),currentYear=now.getUTCFullYear(),currentMonth=now.getUTCMonth()+1;
  const requested=Number(params?.annee);
@@ -37,7 +38,7 @@ export default async function Dashboard({searchParams}) {
  return <div className="modern-dashboard">
   <header className="dashboard-header"><div><span className="dashboard-eyebrow">FABI · VOTRE ACTIVITÉ</span><h1>Bonjour, {user.name.split(' ')[0]}.</h1><p>Vos revenus et vos séjours, au même endroit.</p></div>{user.role==='admin'&&<Link className="button dashboard-create" href="/reservations">+ Nouvelle réservation</Link>}</header>
   <section className="dashboard-metrics" aria-label="Chiffres clés">
-   {manager&&<><article className="metric metric-featured"><span>Revenus {scopeName} · {selectedLabel}</span><strong>{money(monthly[selectedMonth-1].total)}</strong><small>{selectedProperty?'Recettes locatives':'Commissions'} · {year}</small></article><article className="metric"><span>Revenus {scopeName} · année</span><strong>{money(annual)}</strong><small>Janvier à décembre {year}</small></article><article className="metric"><span>Charges & loyers · {scopeName}</span><strong>{money(charges)}</strong><small>Année {year} · payés ou à payer</small></article><article className="metric"><span>Résultat · {scopeName}</span><strong>{money(annual-charges)}</strong><small>Revenus − charges enregistrées</small></article></>}
+   {manager&&<><article className="metric metric-featured"><span>Revenus {scopeName} · {selectedLabel}</span><strong>{money(monthly[selectedMonth-1].total)}</strong><small>{selectedProperty?'Recettes locatives':'Commissions'} · {year}</small></article><article className="metric"><span>Revenus {scopeName} · année</span><strong>{money(annual)}</strong><small>Janvier à décembre {year}</small></article><article className="metric"><span>Charges & loyers · {scopeName}</span><strong>{money(charges)}</strong><small>Année {year} · charges enregistrées</small></article><article className="metric"><span>Résultat · {scopeName}</span><strong>{money(annual-charges)}</strong><small>Revenus − charges enregistrées</small></article></>}
    {manager&&selectedProperty&&<article className="metric forecast-metric"><span>À venir · {scopeName}</span><strong>{money(projection.total)}</strong><small>Prévisionnel des nuits à venir{projection.missing?` · ${projection.missing} séjour(s) à compléter`:null}</small></article>}{!selectedProperty&&<article className="metric"><span>Appartements actifs</span><strong>{stats.properties}</strong><small>Disponibles à la réservation</small></article>}<article className="metric"><span>Réservations confirmées</span><strong>{stats.bookings}</strong><small>Séjours en cours et à venir</small></article>
   </section>
   {manager&&<><div className="dashboard-section-heading"><div><h2>Vos revenus</h2></div><form method="get" className="dashboard-year"><input type="hidden" name="vue" value={scopeValue}/><label htmlFor="dashboard-year">Année</label><input id="dashboard-year" name="annee" type="number" min="2000" max="2200" defaultValue={year}/><button className="secondary">Afficher</button></form></div><div className="dashboard-scope" role="group" aria-label="Choisir les revenus à afficher"><span>Revenus de</span><Link href={'/?annee='+year+'&vue=fabi'} aria-current={!selectedProperty?'page':undefined}>FABI</Link>{propertyResult.rows.map(p=><Link key={p.id} href={'/?annee='+year+'&vue=bien-'+p.id} aria-current={selectedProperty?.id===p.id?'page':undefined}>{p.name}</Link>)}</div><RevenueChart key={year+'-'+scopeValue} data={chartData} year={year} initialMonth={selectedMonth} scopeName={scopeName} isProperty={Boolean(selectedProperty)}/></>}

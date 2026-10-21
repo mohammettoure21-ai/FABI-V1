@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import {requireOwner} from '../../lib/auth';
-import {query} from '../../lib/db.mjs';
+import {query,syncRecurringExpenses} from '../../lib/db.mjs';
 import {ownerData} from '../../lib/owner.mjs';
 import {summarize,months,kinds} from '../../lib/finance.mjs';
 import {money} from '../../lib/security.mjs';
@@ -8,6 +8,7 @@ import {Header,Input,Empty} from '../components';
 import ReservationCalendar from '../reservations/reservation-calendar';
 export default async function OwnerPage({searchParams}){
  const user=await requireOwner(),params=await searchParams;
+ await syncRecurringExpenses();
  const now=new Date(),year=Number(params.annee)>=2000&&Number(params.annee)<=2200&&Number.isInteger(Number(params.annee))?Number(params.annee):now.getUTCFullYear();
  const data=await ownerData({query},user.id,year);
  if(!data)return <section className="panel"><h1>Appartement non disponible</h1><p>Contactez votre administrateur pour vérifier l’appartement attribué à votre compte.</p></section>;
