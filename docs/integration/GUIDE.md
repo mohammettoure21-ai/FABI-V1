@@ -4,7 +4,7 @@ Cette branche prépare un accès technique avec **consultation API et fonctions 
 
 ## Ce qui reste à faire avant utilisation réelle
 
-Le code doit être publié avec votre validation, et `FABI_INTEGRATION_ENABLED=true` doit être ajouté côté serveur. Cette préparation n’a pas été déployée. Aucun accès réel à Vercel/Supabase n’était disponible pendant le développement ; aucune clé de production n’a été créée. Le diagnostic n’a ouvert aucune page métier de production, car ces pages peuvent générer du Wi-Fi, des rappels ou nettoyer des messages.
+La publication a été autorisée. L’API est disponible après déploiement, mais aucune clé n’est créée automatiquement : seul l’administrateur peut enregistrer une empreinte. `FABI_INTEGRATION_ENABLED=false` reste un interrupteur serveur pour bloquer les requêtes et sessions techniques. Aucun accès réel à Vercel/Supabase n’était disponible pendant le développement ; aucune clé de production n’a été créée. Le diagnostic n’a ouvert aucune page métier de production, car ces pages peuvent générer du Wi-Fi, des rappels ou nettoyer des messages.
 
 ## Connexion simple après publication autorisée
 
@@ -56,7 +56,7 @@ Les routes API ne rendent pas le layout du dashboard et n’appellent ni génér
 - Tests : `npm test`, `npm run build:isolated`, puis `npm run test:integration`, `node --test tests/web.integration.mjs` et `node --test tests/ui.integration.mjs`. Toutes les bases de tests sont isolées et fictives.
 - `build:isolated` évite le hook de migration et vide les paramètres DB/messagerie hérités pour la compilation.
 - L’installation Hermes sur votre ordinateur n’a pas été inspectée. La configuration MCP est fournie en exemple, à valider avec cette installation.
-- L’API GitHub utilisée pour ouvrir une pull request est bloquée dans cet environnement. La branche et les changements sont préparés localement. Aucun push n’est effectué pour éviter un éventuel déploiement automatique Vercel avant votre validation.
+- L’API GitHub utilisée pour ouvrir une pull request est bloquée dans cet environnement. Les changements sont conservés dans la branche dédiée et publiés uniquement après validation de la mise en ligne. Le statut réel du déploiement Vercel doit être vérifié séparément du push GitHub.
 - Aucun test réel de Vercel, Supabase ou Meta n’est affirmé. La lecture du dépôt officiel Hermes n’est pas une connexion à votre compte.
 - WhatsApp et les autres intégrations restent à préparer avec Hermes. Les fonctions métier existantes sont accessibles via la session dashboard autorisée ; aucune nouvelle API métier d’écriture n’est ajoutée.
 

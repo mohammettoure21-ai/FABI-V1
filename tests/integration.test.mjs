@@ -20,10 +20,12 @@ test('Accès Hermes : empreinte seule, scopes, révocation et consultations sans
   const before=await facts(db);
   for(const path of ['properties','reservations?from=2026-01-01&to=2026-12-31','availability?property_id=1&arrival=2026-12-01&departure=2026-12-04','report?year=2026'])assert.equal((await api(db,credential,path)).status,200,path);
   assert.equal(await facts(db),before);
+  assert.equal((await api(db,credential,'properties',undefined,{})).status,200);
+  assert.equal((await api(db,{token:'bad'},'properties',undefined,{})).status,401);
   assert.equal((await api(db,credential,'dashboard-requests',{task:'Modifier une réservation'})).status,403);
   assert.equal((await api(db,credential,'bookings',{})).status,404);
   assert.equal((await api(db,{token:digest(credential.token)},'properties')).status,401);
-  assert.equal((await api(db,credential,'properties',undefined,{})).status,503);
+  assert.equal((await api(db,credential,'properties',undefined,{FABI_INTEGRATION_ENABLED:'false'})).status,503);
   const limited=await key(db,['properties:read','reservations:read'],[1]);assert.equal((await (await api(db,limited,'properties')).json()).properties.length,1);
   assert.equal((await api(db,limited,'availability?property_id=2&arrival=2026-12-01&departure=2026-12-04')).status,403);
   await db.transaction(tx=>revokeCredential(tx,credential.id,1));assert.equal((await api(db,credential,'properties')).status,401);

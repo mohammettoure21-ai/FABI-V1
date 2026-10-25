@@ -204,6 +204,6 @@ La tâche quotidienne existante à 04 h (Africa/Dakar, UTC) vérifie les rappels
 
 Les e-mails utilisent la configuration Gmail existante et `CRON_SECRET` pour la tâche quotidienne. Ils indiquent l’appartement et la date d’arrivée, avec un lien vers les réservations, sans montant ni coordonnées du client. Un marqueur persistant par séjour et date d’arrivée évite les rappels répétés. Si les dates changent, la nouvelle date peut déclencher son propre rappel. L’état de la réservation et du destinataire est revérifié avant l’envoi pour ignorer un rappel devenu obsolète ou un compte désactivé. Les échecs SMTP disposent des reprises limitées du système de notifications ; une réponse SMTP incertaine n’est pas renvoyée automatiquement. Les tests utilisent un expéditeur fictif et n’envoient aucun e-mail réel.
 
-## Accès technique Hermes (préparation, non activée)
+## Accès technique Hermes
 
 Le guide [Accès Hermes](docs/integration/GUIDE.md) décrit la clé dédiée, sa révocation et le connecteur MCP local. Les consultations API ne déclenchent aucune tâche métier. Les fonctions administrateur existantes sont accessibles par une session temporaire après confirmation personnelle de la tâche dans le CRM. Aucun accès réel n’est créé ou activé par les tests.
