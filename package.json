@@ -10,7 +10,9 @@
     "db:init": "node --env-file-if-exists=.env.local scripts/init-db.mjs",
     "admin:create": "node --env-file-if-exists=.env.local scripts/create-admin.mjs",
     "test:web": "npm run build && node --test tests/web.integration.mjs",
-    "test:ui": "npm run build && node --test tests/ui.integration.mjs"
+    "test:ui": "npm run build && node --test tests/ui.integration.mjs",
+    "build:isolated": "node scripts/build-isolated.mjs",
+    "test:integration": "node --test tests/integration.web.mjs"
   },
   "dependencies": {
     "next": "^16.0.0",

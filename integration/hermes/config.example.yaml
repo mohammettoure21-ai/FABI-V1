@@ -1,0 +1,19 @@
+# Fusionner dans le config.yaml du profil Hermes privé, après validation.
+# Le fichier de clé reste privé sur la machine Hermes, jamais dans ce YAML.
+mcp_servers:
+  fabi:
+    command: node
+    args:
+      - C:/CHEMIN/FABI-V1/scripts/hermes-mcp.mjs
+    env:
+      FABI_CRM_URL: https://fabi-v1.vercel.app
+      FABI_CRM_KEY_FILE: C:/CHEMIN_PRIVE/hermes.key
+      FABI_HERMES_BROWSER_STATE_FILE: C:/CHEMIN_PRIVE/fabi-state.json
+    tools:
+      include:
+        - fabi_properties
+        - fabi_reservations
+        - fabi_availability
+        - fabi_report
+        - fabi_request_dashboard
+        - fabi_open_dashboard
