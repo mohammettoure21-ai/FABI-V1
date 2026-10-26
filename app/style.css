@@ -39,3 +39,5 @@ aside .sidebar-navigation{display:flex;flex-direction:column;flex:1;min-height:0
 .recurring-choice{padding:16px;background:#faf3f6;border-radius:12px}.recurring-choice p{font-size:.9rem;margin-bottom:0}.finance-filters select{max-width:100%}
 
 .arrival-alerts{border-left:4px solid var(--pink,#a9667e)}.arrival-alert-list{display:grid;gap:12px;margin:16px 0}.arrival-alert-list article{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.arrival-alert-list article strong{flex:1;min-width:150px}
+
+.hermes-credential-body{flex:1;min-width:0}.hermes-access-edit .grid-form{display:grid;align-items:start}.hermes-form .wide{grid-column:1/-1;min-width:0}.hermes-form fieldset{border:1px solid var(--line);border-radius:10px;margin:12px 0;padding:12px 16px}.hermes-form legend{font-size:13px;font-weight:600}.hermes-form .checkbox-label{font-weight:400}

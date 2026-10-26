@@ -8,7 +8,8 @@ export async function saveBrowserState(response,base,expiresAt,filename){
  const file=resolve(filename),repo=resolve('.');const within=(parent,child)=>{const r=relative(parent,child);return r===''||(!r.startsWith('..'+sep)&&r!=='..'&&!isAbsolute(r));};if(within(repo,file)&&!within(resolve('instance'),file))throw new Error('PRIVATE_STATE_PATH_REQUIRED');
  await mkdir(dirname(file),{recursive:true,mode:0o700});
  const temp=file+'.'+randomUUID()+'.tmp';
- const state={cookies:[{name:'fabi_session',value,domain:base.hostname,path:'/',expires:Math.floor(Date.parse(expiresAt)/1000),httpOnly:true,secure:base.protocol==='https:',sameSite:'Lax'}],origins:[]};
+ const expires=expiresAt===null?-1:Math.floor(Date.parse(expiresAt)/1000);if(!Number.isFinite(expires))throw new Error('INVALID_SESSION_EXPIRY');
+ const state={cookies:[{name:'fabi_session',value,domain:base.hostname,path:'/',expires,httpOnly:true,secure:base.protocol==='https:',sameSite:'Lax'}],origins:[]};
  try{await writeFile(temp,JSON.stringify(state),{flag:'wx',mode:0o600});await rename(temp,file);}finally{await rm(temp,{force:true});}
  return file;
 }

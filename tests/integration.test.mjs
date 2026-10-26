@@ -4,9 +4,10 @@ import {randomUUID} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import {btree_gist} from '@electric-sql/pglite/contrib/btree_gist';
 import {schema} from '../lib/schema.mjs';
-import {registerCredential,revokeCredential,newCredential,digest,readScopes,scopes} from '../lib/integration/auth.mjs';
+import {registerCredential,revokeCredential,updateCredential,newCredential,digest,readScopes,scopes} from '../lib/integration/auth.mjs';
 import {integrationHandler} from '../lib/integration/handler.mjs';
 import {approveDashboard} from '../lib/integration/dashboard.mjs';
+import {migrateIntegration} from '../lib/integration/migrate.mjs';
 async function fixture(){const db=new PGlite({extensions:{btree_gist}});await db.exec(schema);await db.exec("INSERT INTO users(name,email,password,role) VALUES('Admin','admin@example.test','test','admin'),('Employé','employee@example.test','test','employee'); INSERT INTO properties(reference,name,neighborhood,category,bedrooms,nightly,status) VALUES('A','Appartement A','Fictif','F2',1,0,'Disponible'),('B','Appartement B','Fictif','F2',1,0,'Disponible')");return db;}
 const env={FABI_INTEGRATION_ENABLED:'true'};
 async function key(db,permissions=readScopes,properties=null){const token=newCredential();const row=await db.transaction(tx=>registerCredential(tx,{name:'Test technique',createdBy:1,permissions,properties,expiresAt:new Date(Date.now()+30*86400000).toISOString(),tokenHash:digest(token)}));return {...row,token};}
@@ -50,4 +51,70 @@ test('Accès Hermes : dashboard après confirmation personnelle, usage unique et
   assert.equal((await db.query('SELECT count(*)::int n FROM reservations')).rows[0].n,0);
   assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries')).rows[0].n,0);
  }finally{await db.close();}
+});
+test('Accès Hermes : élargir puis réduire les droits conserve la clé et exige une nouvelle confirmation',async()=>{
+ const db=await fixture();try{
+  const credential=await key(db,['properties:read'],[1]);
+  const expiresAt=new Date(Date.now()+7*86400000).toISOString();
+  const change={id:credential.id,actor:1,permissions:scopes,properties:null,expiresAt};
+  assert.equal((await api(db,credential,'dashboard-requests',{task:'Tâche explicitement demandée'})).status,403);
+  await db.exec("INSERT INTO users(name,email,password,role) VALUES('Autre admin','other@example.test','test','admin')");
+  await assert.rejects(db.transaction(tx=>updateCredential(tx,{...change,actor:2})),/ADMIN_REQUIRED/);
+  await assert.rejects(db.transaction(tx=>updateCredential(tx,{...change,actor:3})),/CREDENTIAL_NOT_EDITABLE/);
+  await assert.rejects(db.transaction(tx=>updateCredential(tx,{...change,permissions:['unknown']})),/INVALID_SCOPES/);
+  await assert.rejects(db.transaction(tx=>updateCredential(tx,{...change,properties:[1]})),/ADMIN_DASHBOARD_REQUIRES_ALL_PROPERTIES/);
+  await assert.rejects(db.transaction(tx=>updateCredential(tx,{...change,expiresAt:'2000-01-01'})),/INVALID_EXPIRY/);
+  assert.deepEqual((await db.query('SELECT scopes FROM integration_credentials WHERE id=$1',[credential.id])).rows[0].scopes,['properties:read']);
+  await db.transaction(tx=>updateCredential(tx,change));
+  const stored=(await db.query('SELECT * FROM integration_credentials WHERE id=$1',[credential.id])).rows[0];
+  assert.equal(stored.token_hash,digest(credential.token));assert.equal(stored.created_by,1);assert.deepEqual(stored.scopes,scopes);
+  assert.equal((await (await api(db,credential,'properties')).json()).properties.length,2);
+  const approved=await (await api(db,credential,'dashboard-requests',{task:'Tâche autorisée personnellement'})).json();
+  assert.equal((await api(db,credential,'dashboard-session',{request_id:approved.request_id})).status,403);
+  await db.transaction(tx=>approveDashboard(tx,approved.request_id,1));
+  assert.equal((await api(db,credential,'dashboard-session',{request_id:approved.request_id})).status,200);
+  const pending=await (await api(db,credential,'dashboard-requests',{task:'Autre tâche à reconfirmer'})).json();
+  await db.transaction(tx=>approveDashboard(tx,pending.request_id,1));
+  await db.transaction(tx=>updateCredential(tx,{...change,permissions:['properties:read'],properties:[2]}));
+  assert.equal((await db.query('SELECT count(*)::int n FROM sessions WHERE integration_credential_id=$1',[credential.id])).rows[0].n,0);
+  assert.equal((await (await api(db,credential,'properties')).json()).properties[0].id,2);
+  assert.equal((await api(db,credential,'report?year=2026')).status,403);
+  await db.transaction(tx=>updateCredential(tx,change));
+  assert.equal((await api(db,credential,'dashboard-session',{request_id:pending.request_id})).status,410);
+  assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries')).rows[0].n,0);
+  await db.transaction(tx=>revokeCredential(tx,credential.id,1));
+  await assert.rejects(db.transaction(tx=>updateCredential(tx,change)),/CREDENTIAL_NOT_EDITABLE/);
+ }finally{await db.close();}
+});
+test('Accès Hermes autonome : clé sans expiration, aucune validation web, session durable et révocation immédiate',async()=>{
+ const db=await fixture();try{
+  const token=newCredential();const {id}=await db.transaction(tx=>registerCredential(tx,{name:'Hermes permanent fictif',createdBy:1,permissions:['properties:read','dashboard:direct'],properties:null,expiresAt:null,tokenHash:digest(token)}));
+  const c={id,token},read=await key(db);
+  assert.equal((await db.query('SELECT expires_at FROM integration_credentials WHERE id=$1',[id])).rows[0].expires_at,null);
+  assert.equal((await api(db,c,'properties')).status,200);
+  assert.equal((await api(db,read,'dashboard-session',{task:'Tâche demandée',confirmed:true})).status,403);
+  assert.equal((await api(db,c,'dashboard-session',{task:'Tâche demandée',confirmed:false})).status,400);
+  const r=await api(db,c,'dashboard-session',{task:'Gérer le séjour fictif demandé sur le canal privé',confirmed:true});assert.equal(r.status,200);
+  const body=await r.json();assert.equal(body.persistent,true);assert.equal(body.expires_at,null);
+  assert.match(r.headers.get('set-cookie'),/HttpOnly/);assert.match(r.headers.get('set-cookie'),/Secure/);assert.doesNotMatch(r.headers.get('set-cookie'),/Max-Age=600/);
+  assert.equal((await db.query("SELECT expires='infinity'::timestamptz AS permanent FROM sessions WHERE integration_credential_id=$1",[id])).rows[0].permanent,true);
+  assert.equal(await countGrants(db),0);
+  assert.equal((await api(db,c,'dashboard-session',{task:'Reconnexion demandée',confirmed:true})).status,200);
+  assert.equal((await db.query('SELECT count(*)::int n FROM sessions WHERE integration_credential_id=$1',[id])).rows[0].n,1);
+  await db.transaction(tx=>revokeCredential(tx,id,1));
+  assert.equal((await api(db,c,'properties')).status,401);assert.equal((await db.query('SELECT count(*)::int n FROM sessions WHERE integration_credential_id=$1',[id])).rows[0].n,0);
+ }finally{await db.close();}
+});
+async function countGrants(db){return (await db.query('SELECT count(*)::int n FROM integration_dashboard_grants')).rows[0].n;}
+
+test('Migration Hermes : répétable et aucune modification des écritures ou des anciennes permissions',async()=>{
+ const db=await fixture();try{
+  const c=await key(db,['properties:read'],[1]);
+  await db.exec("INSERT INTO finance_entries(property_id,kind,reporting_year,reporting_month,description,amount,source_sheet,activity) VALUES(1,'depense',2026,1,'Document financier fictif conservé',9900,'Original fictif','Autre')");
+  const before=await facts(db),beforeAccess=JSON.stringify((await db.query('SELECT * FROM integration_credentials WHERE id=$1',[c.id])).rows);
+  for(let i=0;i<2;i++)assert.equal((await db.transaction(migrateIntegration)).initialized,true);
+  assert.equal(await facts(db),before);assert.equal(JSON.stringify((await db.query('SELECT * FROM integration_credentials WHERE id=$1',[c.id])).rows),beforeAccess);
+  assert.equal((await db.query("SELECT relrowsecurity FROM pg_class WHERE oid='integration_operations'::regclass")).rows[0].relrowsecurity,true);
+ }finally{await db.close();}
+ const empty=new PGlite();try{assert.equal((await empty.transaction(migrateIntegration)).initialized,false);}finally{await empty.close();}
 });

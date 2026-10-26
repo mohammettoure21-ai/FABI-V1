@@ -15,5 +15,8 @@ mcp_servers:
         - fabi_reservations
         - fabi_availability
         - fabi_report
+        - fabi_prepare_reservation
+        - fabi_prepare_expense
+        - fabi_execute_operation
         - fabi_request_dashboard
         - fabi_open_dashboard

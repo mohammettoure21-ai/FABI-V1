@@ -1,15 +1,15 @@
-# Connecter Hermes à FABI — première étape uniquement
+# Connecter Hermes à FABI — accès autonome et demandes WhatsApp
 
-Cette branche prépare un accès technique avec **consultation API et fonctions administrateur du dashboard après confirmation personnelle**. Elle ne connecte ni WhatsApp, ni des actions automatiques. Elle ne crée pas de compte fictif et ne touche pas la session personnelle de l’administrateur.
+Hermes utilise sa clé privée dédiée, indépendante du mot de passe et du navigateur personnel de l’administrateur. L’accès peut être **sans expiration, jusqu’à révocation**, avec un navigateur Hermes autonome sans limite de 10 minutes. Les outils API peuvent aussi ajouter des réservations et dépenses après préparation et confirmation dans sa conversation. Le branchement WhatsApp est géré par votre installation Hermes ; aucun compte WhatsApp, fournisseur ou envoi payant n’est créé par FABI.
 
 ## Ce qui reste à faire avant utilisation réelle
 
-La publication a été autorisée. L’API est disponible après déploiement, mais aucune clé n’est créée automatiquement : seul l’administrateur peut enregistrer une empreinte. `FABI_INTEGRATION_ENABLED=false` reste un interrupteur serveur pour bloquer les requêtes et sessions techniques. Aucun accès réel à Vercel/Supabase n’était disponible pendant le développement ; aucune clé de production n’a été créée. Le diagnostic n’a ouvert aucune page métier de production, car ces pages peuvent générer du Wi-Fi, des rappels ou nettoyer des messages.
+Cette mise à jour doit être publiée avant de configurer les nouveaux droits. Aucune clé ni permission n’est créée automatiquement en production. `FABI_INTEGRATION_ENABLED=false` bloque toutes les requêtes et sessions techniques ; `FABI_INTEGRATION_WRITES_ENABLED=false` bloque uniquement les outils d’ajout par API. L’absence de ce second réglage laisse agir seulement les clés auxquelles les permissions d’ajout ont été explicitement accordées. Il ne désactive pas les modifications par navigateur autonome : pour couper tout accès, révoquez la clé ou désactivez l’intégration entière.
 
 ## Connexion simple après publication autorisée
 
 1. Sur la machine Hermes, récupérer le code FABI et utiliser Node.js 22 ou plus récent.
-2. Demander à Hermes de générer son fichier privé avec :
+2. **Si Hermes possède déjà sa clé, conservez-la et passez à l’étape 3.** Seulement pour une toute première connexion sans clé existante :
 
    ```powershell
    node scripts/hermes-key.mjs "C:\Users\VOTRE_NOM\.fabi\hermes.key"
@@ -17,11 +17,17 @@ La publication a été autorisée. L’API est disponible après déploiement, m
 
    Le terminal affiche uniquement l’**empreinte SHA-256**, pas la clé privée. Un fichier existant n’est ni remplacé ni supprimé. Sur Windows, conserver ce fichier dans votre profil personnel et restreindre ses autorisations à votre compte Windows. Le fichier est créé en mode 0600 sur les systèmes qui prennent en charge les permissions Unix.
 
-3. Dans FABI, connecté comme administrateur, ouvrir **Accès Hermes**. Copier l’empreinte, choisir les informations autorisées, les appartements et l’expiration. Toutes les permissions sont cochées, conformément à votre demande ; vous pouvez les restreindre. Un accès administrateur au dashboard concerne tous les appartements, donc cette permission ne peut pas être combinée à un périmètre limité à quelques appartements. Valider.
+3. Dans FABI, connecté personnellement comme administrateur, ouvrir **Accès Hermes**. Pour un accès existant, utiliser **Accès enregistrés → Modifier les autorisations**, sans ressaisir l’empreinte ni recréer la clé. Choisir **Sans expiration, jusqu’à révocation**, les informations autorisées, les droits d’ajout et **Accès autonome au CRM sur vos instructions, sans limite de 10 minutes**. L’accès autonome concerne tous les appartements. Valider une fois. Les permissions existantes ne changent pas lors du déploiement.
 4. Sur la machine Hermes, adapter `integration/hermes/config.example.yaml` dans le profil Hermes : indiquer le chemin absolu du script MCP et celui du fichier privé. Ne jamais copier la clé dans ce YAML ni dans le chat.
-5. Relancer/recharger les outils MCP Hermes et demander : « Consulte les appartements FABI avec l’outil fabi_properties. Ne modifie rien. » Une réponse authentifiée réussie confirme la connexion. Un simple écran de connexion ne suffit pas.
+5. Recharger les outils MCP Hermes et lui transmettre [les instructions d’utilisation](../../integration/hermes/INSTRUCTIONS.md), notamment la vérification de votre numéro WhatsApp. Commencer par « Consulte les appartements FABI avec `fabi_properties`. Ne modifie rien. » Une réponse authentifiée réussie confirme la consultation. La connexion WhatsApp et les enregistrements se vérifient ensuite séparément avec des exemples fictifs approuvés.
 
 Les opérations ne nécessitent pas de mot de passe administrateur dans Hermes, ni de connexion Supabase pour Hermes. Le propriétaire ne dispose pas de cet écran ; les responsables et employés ne peuvent pas accorder ou révoquer un accès technique.
+
+## Élargir un accès déjà enregistré sans refaire la clé
+
+Le créateur de l’accès peut modifier les permissions, les appartements et la durée, puis cliquer sur **Enregistrer les autorisations**. L’enregistrement conserve la clé privée existante, ferme les anciennes sessions techniques et expire les préparations en cours. Avec le droit autonome, Hermes peut se reconnecter lui-même depuis sa machine ; aucun nouveau clic de confirmation dans FABI n’est requis pour cette connexion. Un accès révoqué ne peut pas être réactivé de cette façon.
+
+L’accès autonome autorise les fonctions métier du CRM : consulter et utiliser les formulaires existants, sous les contrôles serveur habituels. La gestion des comptes et des autorisations techniques reste réservée à la connexion personnelle de l’administrateur. Votre accord par message est recueilli par Hermes : le CRM authentifie le connecteur, pas l’expéditeur WhatsApp. La restriction aux demandes du propriétaire dépend donc de la configuration et des instructions de votre agent, pas d’une preuve WhatsApp vérifiée par FABI. Une fois une session autonome ouverte, le serveur ne valide pas séparément votre accord pour chaque formulaire. Un simple champ `confirmed:true` ne doit pas être présenté comme une vérification indépendante de votre identité.
 
 ## Ce que l’accès permet
 
@@ -29,8 +35,21 @@ Les opérations ne nécessitent pas de mot de passe administrateur dans Hermes, 
 - `GET /api/integration/reservations?from=2026-11-01&to=2026-12-01` : séjours sur une période (début inclus, fin exclue), sans coordonnées ni notes privées.
 - `GET /api/integration/availability?property_id=1&arrival=2026-11-01&departure=2026-11-04` : disponibilité à l’instant de consultation. Ne crée aucune réservation.
 - `GET /api/integration/report?year=2026&month=11` : chiffres enregistrés, recettes, dépenses et commissions distinguées. Aucun bénéfice FABI n’est assimilé au solde des appartements. Les informations non implémentées restent `null`, pas zéro inventé. Les champs relatifs aux encaissements se limitent aux recettes explicitement marquées encaissées.
+- `POST /api/integration/reservations/prepare` : prépare les dates, voyageurs, appartement, nom, source, statut et prix fourni. Aucun faux client ni encaissement n’est créé. Un prix inconnu reste `null`.
+- `POST /api/integration/expenses/prepare` : prépare une dépense avec date exacte, catégorie, description et montant entier. Le nom de l’intervenant est obligatoire pour les prestations et les employés. La dépense sera marquée payée.
+- `POST /api/integration/operations/execute` : enregistre la préparation indiquée par `operation_id`, avec `confirmed:true`. Le contenu préparé ne peut pas être modifié lors de cette étape. Un nouvel essai avec le même identifiant retourne le résultat initial, sans nouvel enregistrement. La préparation expire après 15 minutes ; cette durée protège la validité du récapitulatif et n’expire pas l’accès personnel d’Hermes.
 
-Chaque requête utilise `Authorization: Bearer CLE_PRIVEE`, fourni uniquement par le pont MCP côté machine Hermes. Le script propose quatre outils de lecture et deux outils de demande/ouverture du dashboard. Le serveur refuse les permissions absentes et les appartements non autorisés, même si le modèle demande autre chose. Aucune API de création de réservation ou de correction financière n’est ajoutée dans cette étape. Les fonctions existantes s’utilisent dans une session dashboard dédiée, après confirmation :
+Chaque requête utilise `Authorization: Bearer CLE_PRIVEE`, fourni uniquement par le pont MCP côté machine Hermes. Le serveur refuse les permissions absentes et les appartements non autorisés. Les ajouts sont tracés dans le journal et utilisent les notifications existantes ; aucune notification financière n’est envoyée aux employés. Aucun outil d’édition ou suppression des écritures financières existantes n’est ajouté par API.
+
+## Navigateur Hermes autonome, sans votre session personnelle
+
+Avec `dashboard:direct`, Hermes appelle `fabi_open_dashboard` avec `task` et `confirmed:true`, après votre accord sur son canal. Le fichier privé de session navigateur est créé sur sa machine. Il le charge dans son propre navigateur et le conserve pour les prochaines demandes. La session côté serveur et la clé sans expiration restent valides jusqu’à révocation ou désactivation du compte créateur. La perte du navigateur local n’impose pas de revenir sur votre ordinateur : Hermes peut recréer sa session avec sa clé. Une nouvelle ouverture remplace l’ancienne session autonome de cette clé. Le fichier ne doit jamais être envoyé dans le chat ni ajouté à GitHub.
+
+Les autres permissions ne sont pas implicitement accordées par `dashboard:direct` aux outils API : cochez aussi les permissions de consultation et d’ajout souhaitées.
+
+## Ancien mode court, conservé pour les accès existants
+
+Le mode `dashboard:admin` garde sa validation personnelle dans FABI et ses sessions courtes. Il n’est pas nécessaire au mode autonome. Son fonctionnement reste :
 
 1. Hermes appelle `fabi_request_dashboard` en décrivant la tâche précise.
 2. Vous ouvrez **Accès Hermes** depuis votre connexion personnelle et confirmez la tâche.
@@ -48,17 +67,17 @@ La base ne conserve que le hash SHA-256 d’une clé aléatoire de 256 bits. Ni 
 
 ## Consultation sans effets métier
 
-Les routes API ne rendent pas le layout du dashboard et n’appellent ni génération Wi-Fi, ni rappels, ni envoi de messages, ni nettoyage des conversations. Seul un journal technique (identifiant d’accès, route constante, résultat, heure) est ajouté. Aucun secret, corps de requête, numéro, contenu de message ou URL complète n’y est enregistré. Limite : 120 requêtes/minute par accès ; pas de garantie d’un anti-DDoS complet. Le journal technique peut être purgé par une opération d’entretien explicitement autorisée, jamais par une consultation métier.
+Les routes API GET ne rendent pas le layout du dashboard et n’appellent ni génération Wi-Fi, ni rappels, ni envoi de messages, ni nettoyage des conversations. Seul un journal technique (identifiant d’accès, route constante, résultat, heure) est ajouté. Aucun secret, corps de requête, numéro, contenu de message ou URL complète n’y est enregistré. Les préparations privées conservent leurs données métier dans une table protégée. Les écritures exécutées créent le journal et les notifications autorisées. Limite : 120 requêtes/minute par accès ; pas de garantie d’un anti-DDoS complet. Les pages métier du navigateur conservent leurs effets automatiques existants.
 
 ## Vérifications et limites du diagnostic
 
-- Dépôt local inspecté ; les migrations existantes peuvent réconcilier des appartements et supprimer une ancienne écriture de loyer. **Ne pas lancer `npm run build` avec une base de production pendant les essais.**
+- Le build utilise maintenant une migration limitée aux tables et colonnes d’accès Hermes. Il n’exécute plus les anciennes fusions d’appartements ou suppressions de loyers du script historique. Les tests de compilation se font malgré tout avec `build:isolated`, sans connexion de production.
 - Tests : `npm test`, `npm run build:isolated`, puis `npm run test:integration`, `node --test tests/web.integration.mjs` et `node --test tests/ui.integration.mjs`. Toutes les bases de tests sont isolées et fictives.
 - `build:isolated` évite le hook de migration et vide les paramètres DB/messagerie hérités pour la compilation.
 - L’installation Hermes sur votre ordinateur n’a pas été inspectée. La configuration MCP est fournie en exemple, à valider avec cette installation.
 - L’API GitHub utilisée pour ouvrir une pull request est bloquée dans cet environnement. Les changements sont conservés dans la branche dédiée et publiés uniquement après validation de la mise en ligne. Le statut réel du déploiement Vercel doit être vérifié séparément du push GitHub.
 - Aucun test réel de Vercel, Supabase ou Meta n’est affirmé. La lecture du dépôt officiel Hermes n’est pas une connexion à votre compte.
-- WhatsApp et les autres intégrations restent à préparer avec Hermes. Les fonctions métier existantes sont accessibles via la session dashboard autorisée ; aucune nouvelle API métier d’écriture n’est ajoutée.
+- Le fondateur indique que WhatsApp est relié à Hermes. La passerelle, la vérification du numéro autorisé et l’exécution depuis son téléphone doivent encore être vérifiées sur sa machine. Aucun message WhatsApp réel ni écriture de production n’est utilisé pour les tests de développement.
 
 ## Import de session dans un navigateur Hermes local
 
