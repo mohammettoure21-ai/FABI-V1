@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
+import {randomUUID} from 'node:crypto';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
@@ -32,6 +33,7 @@ test('Hermes HTTP local et MCP : lecture, ajouts confirmés, accès autonome dur
   const redeemed=await api('dashboard-session',{request_id:grant.request_id});assert.equal(redeemed.status,200);
   const hermesCookie=redeemed.headers.get('set-cookie').split(';')[0];assert.doesNotMatch(await redeemed.text(),new RegExp(hermesCookie.split('=')[1]));
   const dashboard=await fetch(origin+'/',{headers:{cookie:hermesCookie}});assert.equal(dashboard.status,200);assert.match(await dashboard.text(),/Hermes/);
+  const deniedTeam=await fetch(origin+'/equipe',{headers:{cookie:hermesCookie},redirect:'manual'});assert.equal(deniedTeam.status,307);assert.equal(deniedTeam.headers.get('location'),'/');
   assert.equal((await fetch(origin+'/integrations',{headers:{cookie:hermesCookie}})).status,500);
   const second=await (await api('dashboard-requests',{task:'Deuxième tâche à confirmer par la personne'})).json();
   assert.equal((await formAction('/integrations','request_id',{request_id:second.request_id},hermesCookie)).status,500);
@@ -76,7 +78,19 @@ test('Hermes HTTP local et MCP : lecture, ajouts confirmés, accès autonome dur
   assert.equal(JSON.stringify((await db.query('SELECT * FROM finance_entries ORDER BY id')).rows),preservedFinance);
   const directState=JSON.parse(await readFile(directStateFile,'utf8'));assert.equal(directState.cookies[0].expires,-1);assert.doesNotMatch(executeOutput,new RegExp(directState.cookies[0].value));
   const directCookie='fabi_session='+directState.cookies[0].value;
-  assert.equal((await fetch(origin+'/clients',{headers:{cookie:directCookie},redirect:'manual'})).status,200);
+  for(const path of ['/','/clients','/appartements','/reservations','/messages','/finances','/depenses','/passages','/menage']){
+   const response=await fetch(origin+path,{headers:{cookie:directCookie}});assert.equal(response.status,200,path);
+   const html=await response.text();assert.doesNotMatch(html,/href="\/(?:equipe|integrations)"/,path);
+  }
+  const directTeam=await fetch(origin+'/equipe',{headers:{cookie:directCookie},redirect:'manual'});assert.equal(directTeam.status,307);assert.equal(directTeam.headers.get('location'),'/');
+  const humanTeam=await fetch(origin+'/equipe',{headers:{cookie},redirect:'manual'});assert.equal(humanTeam.status,200);assert.match(await humanTeam.text(),/Équipe &amp; accès/);
+  const accountsBefore=(await db.query('SELECT count(*)::int n FROM users')).rows[0].n;
+  const createDenied=await formAction('/equipe','name',{name:'Interdit pour Hermes',email:'denied@example.test',password:'MotDePasseFictifInterdit123!',role:'admin'},directCookie);assert.match(createDenied.headers.get('location'),/erreur=/);
+  const toggleDenied=await formAction('/equipe','id',{id:'2'},directCookie);assert.match(toggleDenied.headers.get('location'),/erreur=/);
+  assert.equal((await db.query('SELECT count(*)::int n FROM users')).rows[0].n,accountsBefore);assert.equal((await db.query('SELECT active FROM users WHERE id=2')).rows[0].active,true);
+  const sent=await formAction('/messages','message_key',{message_key:randomUUID(),recipient_id:'2',message:'Message interne fictif demandé à Hermes'},directCookie);assert.equal(sent.status,303);assert.match(sent.headers.get('location'),/succes=/);
+  assert.equal((await db.query('SELECT count(*)::int n FROM team_messages WHERE body=$1',['Message interne fictif demandé à Hermes'])).rows[0].n,1);
+  assert.equal((await db.query("SELECT integration_credential_id FROM audit WHERE action='Message envoyé à 1 collaborateur(s)' ORDER BY id DESC LIMIT 1")).rows[0].integration_credential_id,existing.id);
   const directCreated=await formAction('/clients','name',{name:'Contact autonome fictif',phone:'+221000000002',status:'Nouveau',contact_type:'client'},directCookie);
   assert.equal(directCreated.status,303);assert.equal((await db.query("SELECT count(*)::int n FROM clients WHERE name='Contact autonome fictif'")).rows[0].n,1);
   assert.equal((await fetch(origin+'/integrations',{headers:{cookie:directCookie},redirect:'manual'})).status,500);

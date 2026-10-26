@@ -17,7 +17,7 @@ export async function sendMessage(form){
  }catch{redirect('/messages?erreur=Choisissez+au+moins+un+destinataire+et+écrivez+un+message');}
  try{await transaction(async db=>{
   deliveries=await insertMessages(db,user,{recipients,all},body,key);
-  if(deliveries.length)await db.query('INSERT INTO audit(user_id,action) VALUES($1,$2)',[user.id,'Message envoyé à '+deliveries.length+' collaborateur(s)']);
+  if(deliveries.length)await db.query('INSERT INTO audit(user_id,action,integration_credential_id) VALUES($1,$2,$3)',[user.id,'Message envoyé à '+deliveries.length+' collaborateur(s)',user.integration_id??null]);
  });}catch{redirect('/messages?erreur=Message+non+envoyé.+Vérifiez+les+destinataires+actifs.');}
  if(deliveries.length)scheduleMessageEmails();
  const destination=all?'/messages?':'/messages?dest='+recipients[0]+'&';

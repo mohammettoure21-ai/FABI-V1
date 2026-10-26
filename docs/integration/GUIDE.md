@@ -47,6 +47,8 @@ Avec `dashboard:direct`, Hermes appelle `fabi_open_dashboard` avec `task` et `co
 
 Les autres permissions ne sont pas implicitement accordées par `dashboard:direct` aux outils API : cochez aussi les permissions de consultation et d’ajout souhaitées.
 
+Le navigateur autonome donne accès aux modules métier existants, y compris Messages, Finances, Dépenses, ménage et vérification, Clients et partenaires, Appartements et Réservations. « Équipe & accès » et « Accès Hermes » sont masqués et bloqués côté serveur pour les sessions techniques, y compris en lecture. La création et la désactivation de comptes restent refusées même en envoyant directement le formulaire au serveur.
+
 ## Ancien mode court, conservé pour les accès existants
 
 Le mode `dashboard:admin` garde sa validation personnelle dans FABI et ses sessions courtes. Il n’est pas nécessaire au mode autonome. Son fonctionnement reste :
