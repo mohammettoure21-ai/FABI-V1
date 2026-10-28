@@ -107,6 +107,25 @@ test('Accès Hermes autonome : clé sans expiration, aucune validation web, sess
 });
 async function countGrants(db){return (await db.query('SELECT count(*)::int n FROM integration_dashboard_grants')).rows[0].n;}
 
+test('Deux Hermes : consultations authentifiées, clés et sessions indépendantes, révocation séparée',async()=>{
+ const db=await fixture();try{
+  const first=await key(db,['properties:read','dashboard:direct']);
+  assert.equal((await api(db,first,'dashboard-session',{task:'Consultation fictive pour le premier agent',confirmed:true})).status,200);
+  const firstRecord=JSON.stringify((await db.query('SELECT * FROM integration_credentials WHERE id=$1',[first.id])).rows);
+  const firstSessions=JSON.stringify((await db.query('SELECT * FROM sessions WHERE integration_credential_id=$1',[first.id])).rows);
+  const token=newCredential(),secondRecord=await db.transaction(tx=>registerCredential(tx,{name:'Hermes 2',createdBy:1,permissions:[...readScopes,'reservations:create','expenses:create','dashboard:direct'],properties:null,expiresAt:null,tokenHash:digest(token)}));
+  const second={...secondRecord,token};assert.notEqual(first.token,second.token);
+  for(const c of [first,second]){const r=await api(db,c,'properties');assert.equal(r.status,200);assert.equal((await r.json()).properties.length,2);}
+  for(let i=0;i<2;i++)assert.equal((await api(db,second,'dashboard-session',{task:'Consultation fictive pour Hermes 2',confirmed:true})).status,200);
+  assert.equal(JSON.stringify((await db.query('SELECT * FROM integration_credentials WHERE id=$1',[first.id])).rows),firstRecord);
+  assert.equal(JSON.stringify((await db.query('SELECT * FROM sessions WHERE integration_credential_id=$1',[first.id])).rows),firstSessions);
+  await db.transaction(tx=>revokeCredential(tx,second.id,1));
+  assert.equal((await api(db,second,'properties')).status,401);assert.equal((await api(db,first,'properties')).status,200);
+  assert.equal(JSON.stringify((await db.query('SELECT * FROM sessions WHERE integration_credential_id=$1',[first.id])).rows),firstSessions);
+  assert.equal((await db.query('SELECT count(*)::int n FROM finance_entries')).rows[0].n,0);assert.equal((await db.query('SELECT count(*)::int n FROM reservations')).rows[0].n,0);
+ }finally{await db.close();}
+});
+
 test('Migration Hermes : répétable et aucune modification des écritures ou des anciennes permissions',async()=>{
  const db=await fixture();try{
   const c=await key(db,['properties:read'],[1]);
