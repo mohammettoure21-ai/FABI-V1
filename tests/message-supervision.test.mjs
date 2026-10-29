@@ -22,7 +22,7 @@ test('Suivi employé : historique complet dans les deux sens, échanges encadran
   const seed=async(s,r,body,copy=false)=>db.query('INSERT INTO team_messages(sender_id,recipient_id,body,request_key,is_supervision) VALUES($1,$2,$3,$4,$5)',[s,r,body,randomUUID(),copy]);
   await seed(2,1,'Ancienne demande de Mbagnick');await seed(1,2,'Ancienne réponse de Mohammet');
   await seed(2,3,'Ancienne copie fragmentée',true);
-  const send=(actor,recipient,body)=>db.transaction(tx=>insertMessages(tx,actor,{recipients:[recipient]},body,randomUUID()));
+  const send=(actor,recipient,body)=>db.transaction(tx=>insertMessages(tx,actor,{recipients:[recipient]},body,randomUUID(),{env:{FABI_TEAM_EMAILS_ENABLED:'true'}}));
   await send(employee,1,'Nouvelle demande');await send(admin,2,'Nouvelle réponse');
   await send(admin,3,'Discussion privée entre encadrants');
   const threads=await employeeThreads(db,manager);
@@ -54,13 +54,13 @@ test('Notifications : demande et réponse employé notifient l’encadrement ; �
  try{
   await db.exec(schema);
   await db.exec(`INSERT INTO users(name,email,password,role) VALUES('Admin','admin@example.test','test','admin'),('Mbagnick','employee@example.test','test','employee'),('Responsable','manager@example.test','test','manager');`);
-  const send=(id,role,recipient,body)=>db.transaction(tx=>insertMessages(tx,{id,role},{recipients:[recipient]},body,randomUUID()));
+  const send=(id,role,recipient,body)=>db.transaction(tx=>insertMessages(tx,{id,role},{recipients:[recipient]},body,randomUUID(),{env:{FABI_TEAM_EMAILS_ENABLED:'true'}}));
   const first=(await send(2,'employee',1,'Demande confidentielle'))[0].id;
   await send(1,'admin',2,'Réponse confidentielle');
   const privateId=(await send(1,'admin',3,'Discussion privée'))[0].id;
   assert.equal((await db.query('SELECT message_id FROM team_message_observers WHERE message_id=$1',[privateId])).rows.length,0);
   const emails=[];
-  const env={GMAIL_USER:'fictif@gmail.com',GMAIL_APP_PASSWORD:'test-only'};
+  const env={FABI_TEAM_EMAILS_ENABLED:'true',GMAIL_USER:'fictif@gmail.com',GMAIL_APP_PASSWORD:'test-only'};
   const sendMail=async mail=>{emails.push(mail);assert.doesNotMatch(mail.text,/Demande confidentielle|Réponse confidentielle|Discussion privée/);return {accepted:[mail.to]};};
   const result=await deliverPendingMessageEmails(db,{env,sendMail});
   assert.equal(result.sent,5);

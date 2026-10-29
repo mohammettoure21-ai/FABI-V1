@@ -49,15 +49,15 @@ test('Notifications de chaque copie : destinataires autorisés, secret absent, r
  try{
   await db.exec(schema);
   await db.exec(`INSERT INTO users(name,email,password,role) VALUES('Admin','admin@example.test','test','admin'),('Responsable','manager@example.test','test','manager'),('Employé','employee@example.test','test','employee');`);
-  await db.transaction(tx=>insertMessages(tx,{id:3,role:'employee'},{recipients:[1]},'Contenu confidentiel',randomUUID()));
-  assert.equal((await deliverPendingMessageEmails(db,{env:{}})).configured,false);
+  await db.transaction(tx=>insertMessages(tx,{id:3,role:'employee'},{recipients:[1]},'Contenu confidentiel',randomUUID(),{env:{FABI_TEAM_EMAILS_ENABLED:'true'}}));
+  assert.equal((await deliverPendingMessageEmails(db,{env:{FABI_TEAM_EMAILS_ENABLED:'true'}})).configured,false);
   assert.equal((await db.query('SELECT max(email_attempts)::int n FROM team_messages')).rows[0].n,0);
-  const recipients=[];const env={GMAIL_USER:'fictif@gmail.com',GMAIL_APP_PASSWORD:'test-only'};
+  const recipients=[];const env={FABI_TEAM_EMAILS_ENABLED:'true',GMAIL_USER:'fictif@gmail.com',GMAIL_APP_PASSWORD:'test-only'};
   const sendMail=async mail=>{recipients.push(mail.to);assert.doesNotMatch(mail.text,/Contenu confidentiel/);return {accepted:[mail.to]};};
   assert.equal((await deliverPendingMessageEmails(db,{env,sendMail})).sent,2);
   assert.deepEqual(recipients.sort(),['admin@example.test','manager@example.test']);
   assert.equal((await deliverPendingMessageEmails(db,{env,sendMail})).sent,0);
-  await db.transaction(tx=>insertMessages(tx,{id:1,role:'admin'},{recipients:[2]},'Autre message',randomUUID()));
+  await db.transaction(tx=>insertMessages(tx,{id:1,role:'admin'},{recipients:[2]},'Autre message',randomUUID(),{env:{FABI_TEAM_EMAILS_ENABLED:'true'}}));
   const failing=async()=>{throw Object.assign(new Error('SMTP failure'),{code:'EAUTH'});};
   for(let i=0;i<3;i++)assert.equal((await deliverPendingMessageEmails(db,{env,sendMail:failing})).failed,1);
   assert.equal((await deliverPendingMessageEmails(db,{env,sendMail})).sent,0);

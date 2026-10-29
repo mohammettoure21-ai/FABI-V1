@@ -4,6 +4,14 @@ FABI s’utilise désormais dans un navigateur. La version Python/Windows a ét�
 
 La rubrique **Factures** permet maintenant d’archiver vos PDF déjà préparés et de les télécharger. Hermes peut aussi y déposer un PDF à votre demande avec son accès dédié. Voir le [guide Factures](docs/FACTURES.md) pour les droits, limites et la mise à jour du connecteur Hermes 2. Aucun encaissement ni dépense n’est créé par cet archivage.
 
+## Notifications e-mail actuellement en pause pour l’équipe
+
+À la demande du fondateur, seul **le compte créé lors de la première installation** conserve ses notifications e-mail, s’il est toujours actif et administrateur. Les employés, responsables, propriétaires et autres administrateurs ne reçoivent plus d’e-mails automatiques. Il n’y a pas de bascule vers un autre compte si le fondateur est désactivé. Les messages et indicateurs du CRM, les destinataires des discussions et leurs droits de lecture restent inchangés ; les discussions privées ne sont pas transférées au fondateur.
+
+Cette pause est le comportement par défaut, y compris sans nouveau réglage dans Vercel. Elle couvre les activités, finances, rappels d’arrivée, messages directs, copies de suivi et relances manuelles. Les notifications aux autres comptes sont écartées dès leur création (`skipped` pour les activités, `email_paused` pour la messagerie). La migration protège aussi les anciennes files en attente, puis chaque traitement revérifie la règle, même si Gmail est absent. Les e-mails déjà envoyés et les résultats SMTP incertains ne sont pas réécrits.
+
+**Jusqu’à nouvelle demande, conserver `FABI_TEAM_EMAILS_ENABLED=false` ou laisser cette variable absente.** Une reprise explicite utilisera `FABI_TEAM_EMAILS_ENABLED=true` dans la configuration serveur et un redéploiement. Elle concernera les nouvelles notifications selon leurs droits habituels, sans renvoyer les anciennes notifications suspendues. Ne pas modifier le mot de passe Gmail pour gérer cette pause. Les règles d’envoi à l’équipe décrites plus bas ne s’appliquent que lorsque ce mode est explicitement réactivé.
+
 ## Comprendre les trois pièces
 
 - **GitHub** conserve le code et l’historique des modifications.

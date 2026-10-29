@@ -82,6 +82,7 @@ test('Hermes HTTP local et MCP : lecture, ajouts confirmés, accès autonome dur
   for(const path of ['/','/clients','/appartements','/reservations','/messages','/finances','/depenses','/passages','/menage','/factures']){
    const response=await fetch(origin+path,{headers:{cookie:directCookie}});assert.equal(response.status,200,path);
    const html=await response.text();assert.doesNotMatch(html,/href="\/(?:equipe|integrations)"/,path);
+   if(path==='/messages')assert.match(html,/Les e-mails automatiques aux collaborateurs sont en pause/);
   }
   // Actual local MCP file upload -> authenticated API -> private PDF download.
   const invoiceFile=join(temp,'Facture fictive.pdf'),pdf=invoicePdf();await writeFile(invoiceFile,pdf);

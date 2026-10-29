@@ -22,7 +22,7 @@ export async function sendMessage(form){
  if(deliveries.length)scheduleMessageEmails();
  const destination=all?'/messages?':'/messages?dest='+recipients[0]+'&';
  revalidatePath('/messages');revalidatePath('/','layout');
- redirect(destination+'succes='+encodeURIComponent(deliveries.length?'Message enregistré. Les notifications e-mail sont mises en attente.':'Message déjà enregistré.')+'#conversation');
+ redirect(destination+'succes='+encodeURIComponent(deliveries.length?'Message enregistré.':'Message déjà enregistré.')+'#conversation');
 }
 export async function readMessage(form){
  const user=await requireUser();let id;try{id=integer(form.get('message_id'),1);}catch{redirect('/messages');}

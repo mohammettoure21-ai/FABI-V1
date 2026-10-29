@@ -9,10 +9,10 @@ test('Activité : tous les comptes actifs, confidentialité, transaction, repris
  try{
   await db.exec(schema);await db.exec(schema);
   await db.exec(`INSERT INTO users(name,email,password,role,active) VALUES('Admin','admin@example.test','test','admin',TRUE),('Employé','employee@example.test','test','employee',TRUE),('Inactif','inactive@example.test','test','employee',FALSE);`);
-  await db.transaction(tx=>recordActivity(tx,1,'Création compte prive@example.test'));
+  await db.transaction(tx=>recordActivity(tx,1,'Création compte prive@example.test',{env:{FABI_TEAM_EMAILS_ENABLED:'true'}}));
   assert.equal((await db.query('SELECT count(*)::int n FROM activity_email_deliveries')).rows[0].n,2);
-  assert.equal((await deliverActivityEmails(db,{env:{}})).configured,false);
-  const env={GMAIL_USER:'fictif@gmail.com',GMAIL_APP_PASSWORD:'fake-not-a-secret'},sent=[];
+  assert.equal((await deliverActivityEmails(db,{env:{FABI_TEAM_EMAILS_ENABLED:'true'}})).configured,false);
+  const env={FABI_TEAM_EMAILS_ENABLED:'true',GMAIL_USER:'fictif@gmail.com',GMAIL_APP_PASSWORD:'fake-not-a-secret'},sent=[];
   const sendMail=async mail=>{assert.doesNotMatch(mail.text,/prive@example.test|mot de passe/);sent.push(mail);return {accepted:[mail.to]};};
   await Promise.all([deliverActivityEmails(db,{env,sendMail}),deliverActivityEmails(db,{env,sendMail})]);
   assert.deepEqual(sent.map(m=>m.to).sort(),['admin@example.test','employee@example.test']);
@@ -23,7 +23,7 @@ test('Activité : tous les comptes actifs, confidentialité, transaction, repris
   assert.equal((await db.query('SELECT count(*)::int n FROM activity_email_deliveries')).rows[0].n,2);
   await db.transaction(tx=>recordActivity(tx,1,'Message envoyé #1'));await db.transaction(tx=>recordActivity(tx,1,'Connexion'));
   assert.equal((await db.query('SELECT count(*)::int n FROM activity_email_deliveries')).rows[0].n,2);
-  await db.transaction(tx=>recordActivity(tx,1,'Création écriture financière 1'));
+  await db.transaction(tx=>recordActivity(tx,1,'Création écriture financière 1',{env:{FABI_TEAM_EMAILS_ENABLED:'true'}}));
   await deliverActivityEmails(db,{env,limit:1,sendMail:async()=>{throw new Error('SMTP');}});
   assert.equal((await db.query("SELECT count(*)::int n FROM activity_email_deliveries WHERE status='failed'")).rows[0].n,1);
   assert.equal((await db.query("SELECT count(*)::int n FROM activity_email_deliveries d JOIN audit a ON a.id=d.audit_id WHERE a.action='Création écriture financière 1' AND d.recipient_id=2")).rows[0].n,0);
