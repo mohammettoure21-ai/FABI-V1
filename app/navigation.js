@@ -9,7 +9,7 @@ export default function Navigation({role,unread=0,integration=false}) {
  useEffect(()=>setCount(unread),[unread]);
  useEffect(()=>{let active=true;const controller=new AbortController();async function refresh(){if(document.visibilityState!=='visible')return;try{const response=await fetch('/api/messages/unread',{cache:'no-store',signal:controller.signal});if(response.ok){const data=await response.json();if(active&&Number.isInteger(data.count))setCount(data.count);}}catch{}}const timer=setInterval(refresh,20000);window.addEventListener('focus',refresh);refresh();return()=>{active=false;controller.abort();clearInterval(timer);window.removeEventListener('focus',refresh);};},[pathname]);
  const links=role==='owner'?[['/proprietaire','Mon appartement'],['/messages','Messages'+(count?' ('+count+')':'')]]:[['/','Tableau de bord'],['/appartements','Appartements'],['/reservations','Réservations'],['/messages','Messages'+(count?' ('+count+')':'')]];
- if(['admin','manager'].includes(role))links.push(['/finances','Finances']);
+ if(['admin','manager'].includes(role))links.push(['/finances','Finances'],['/factures','Factures']);
  if(role==='admin'&&!integration)links.push(['/equipe','Équipe & accès'],['/integrations','Accès Hermes']);
  const item=([href,label])=><Link key={href} href={href} aria-current={(href==='/'?pathname==='/':pathname.startsWith(href))?'page':undefined}>{label}</Link>;
  const secondary=[];

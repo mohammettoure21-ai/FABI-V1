@@ -2,6 +2,8 @@
 
 Pour un agent supplémentaire, suivre [Ajouter Hermes 2](HERMES-2.md) : nouvelle clé et profil séparés, sans remplacer le premier accès.
 
+Pour les documents PDF déjà préparés : voir [Factures PDF et dépôt par Hermes](../FACTURES.md). Les outils `fabi_invoices` et `fabi_save_invoice` réutilisent la permission métier `dashboard:direct`, sans nouvelle clé.
+
 Hermes utilise sa clé privée dédiée, indépendante du mot de passe et du navigateur personnel de l’administrateur. L’accès peut être **sans expiration, jusqu’à révocation**, avec un navigateur Hermes autonome sans limite de 10 minutes. Les outils API peuvent aussi ajouter des réservations et dépenses après préparation et confirmation dans sa conversation. Le branchement WhatsApp est géré par votre installation Hermes ; aucun compte WhatsApp, fournisseur ou envoi payant n’est créé par FABI.
 
 ## Ce qui reste à faire avant utilisation réelle

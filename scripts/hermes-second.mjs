@@ -18,7 +18,7 @@ export async function prepareSecondHermes(directory=join(homedir(),'.fabi','herm
  const key='fabi_'+randomBytes(32).toString('base64url');
  await writeFile(keyFile,key+'\n',{flag:'wx',mode:0o600});
  const quoted=value=>JSON.stringify(value);
- const toolNames=['fabi_properties','fabi_reservations','fabi_availability','fabi_report','fabi_prepare_reservation','fabi_prepare_expense','fabi_execute_operation','fabi_open_dashboard'];
+ const toolNames=['fabi_properties','fabi_reservations','fabi_availability','fabi_report','fabi_prepare_reservation','fabi_prepare_expense','fabi_execute_operation','fabi_open_dashboard','fabi_invoices','fabi_save_invoice'];
  const config=`# Hermes 2 uniquement : fusionner dans son profil séparé, jamais dans celui du premier agent.
 mcp_servers:
   fabi:

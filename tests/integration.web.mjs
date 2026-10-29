@@ -10,7 +10,8 @@ import {btree_gist} from '@electric-sql/pglite/contrib/btree_gist';
 import {createServer} from 'pglite-server';
 import {schema} from '../lib/schema.mjs';
 import {registerCredential,newCredential,digest,scopes} from '../lib/integration/auth.mjs';
-import {hashPassword} from '../lib/security.mjs';
+import {hashPassword,tokenHash} from '../lib/security.mjs';
+import {invoicePdf} from './fixtures/invoice.mjs';
 async function run(args,env){return new Promise(resolve=>{const p=spawn(process.execPath,args,{env,stdio:['ignore','pipe','pipe']});let output='';p.stdout.on('data',d=>output+=d);p.stderr.on('data',d=>output+=d);p.on('exit',code=>resolve({code,output}));});}
 test('Hermes HTTP local et MCP : lecture, ajouts confirmés, accès autonome durable, migration et révocation', {timeout:120000},async()=>{
  const db=new PGlite({extensions:{btree_gist}});await db.exec(schema);
@@ -78,10 +79,37 @@ test('Hermes HTTP local et MCP : lecture, ajouts confirmés, accès autonome dur
   assert.equal(JSON.stringify((await db.query('SELECT * FROM finance_entries ORDER BY id')).rows),preservedFinance);
   const directState=JSON.parse(await readFile(directStateFile,'utf8'));assert.equal(directState.cookies[0].expires,-1);assert.doesNotMatch(executeOutput,new RegExp(directState.cookies[0].value));
   const directCookie='fabi_session='+directState.cookies[0].value;
-  for(const path of ['/','/clients','/appartements','/reservations','/messages','/finances','/depenses','/passages','/menage']){
+  for(const path of ['/','/clients','/appartements','/reservations','/messages','/finances','/depenses','/passages','/menage','/factures']){
    const response=await fetch(origin+path,{headers:{cookie:directCookie}});assert.equal(response.status,200,path);
    const html=await response.text();assert.doesNotMatch(html,/href="\/(?:equipe|integrations)"/,path);
   }
+  // Actual local MCP file upload -> authenticated API -> private PDF download.
+  const invoiceFile=join(temp,'Facture fictive.pdf'),pdf=invoicePdf();await writeFile(invoiceFile,pdf);
+  const invoiceArgs={local_path:invoiceFile,title:'Facture WhatsApp fictive',reference:'TEST-FACTURE',property_id:1,confirmed:true};
+  const invoiceInput=[
+   {jsonrpc:'2.0',id:30,method:'tools/call',params:{name:'fabi_save_invoice',arguments:{...invoiceArgs,confirmed:false}}},
+   {jsonrpc:'2.0',id:31,method:'tools/call',params:{name:'fabi_save_invoice',arguments:invoiceArgs}},
+   {jsonrpc:'2.0',id:32,method:'tools/call',params:{name:'fabi_save_invoice',arguments:invoiceArgs}},
+   {jsonrpc:'2.0',id:33,method:'tools/call',params:{name:'fabi_invoices',arguments:{q:'TEST-FACTURE'}}}
+  ];
+  const invoiceBridge=spawn(process.execPath,['scripts/hermes-mcp.mjs'],{env:{...env,FABI_CRM_URL:origin,FABI_CRM_ALLOW_LOCAL:'true',FABI_CRM_KEY_FILE:newFile},stdio:['pipe','pipe','pipe']});let invoiceOutput='';invoiceBridge.stdout.on('data',d=>invoiceOutput+=d);invoiceBridge.stdin.end(invoiceInput.map(x=>JSON.stringify(x)).join('\n')+'\n');await new Promise(r=>invoiceBridge.on('exit',r));
+  const invoiceMessages=invoiceOutput.trim().split('\n').map(x=>JSON.parse(x));assert.equal(invoiceMessages.length,4);assert.equal(invoiceMessages[0].result.isError,true);
+  for(const message of invoiceMessages.slice(1))assert.equal(message.result.isError,undefined,JSON.stringify(message.result));
+  const archived=JSON.parse(invoiceMessages[1].result.content[0].text);assert.equal(archived.archived,true);assert.equal(JSON.parse(invoiceMessages[2].result.content[0].text).already_saved,true);assert.equal(JSON.parse(invoiceMessages[3].result.content[0].text).total,1);
+  assert.doesNotMatch(invoiceOutput,new RegExp(privateToken));assert.ok(!invoiceOutput.includes(pdf.toString('base64')));
+  const download=await fetch(origin+archived.download_url,{headers:{cookie:directCookie}});assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),pdf);assert.match(download.headers.get('content-disposition'),/attachment/);
+  assert.equal((await fetch(origin+archived.download_url)).status,401);
+  const invoicePage=await fetch(origin+'/factures',{headers:{cookie}});assert.equal(invoicePage.status,200);assert.match(await invoicePage.text(),/Facture WhatsApp fictive/);
+  const browserForm=new FormData();browserForm.set('title','Ajout navigateur fictif');browserForm.set('pdf',new Blob([invoicePdf('Deuxieme facture fictive')],{type:'application/pdf'}),'navigateur.pdf');
+  assert.equal((await fetch(origin+'/api/factures',{method:'POST',headers:{cookie,origin:'https://evil.test'},body:browserForm})).status,403);
+  const uploaded=await fetch(origin+'/api/factures',{method:'POST',headers:{cookie,origin},body:browserForm,redirect:'manual'});assert.equal(uploaded.status,303);assert.match(uploaded.headers.get('location'),/succes=/);
+  assert.equal((await db.query('SELECT count(*)::int n FROM invoice_documents')).rows[0].n,2);
+  assert.equal(JSON.stringify((await db.query('SELECT * FROM finance_entries ORDER BY id')).rows),preservedFinance);
+  const employeeSession=randomUUID();await db.query("INSERT INTO sessions(token,user_id,expires) VALUES($1,2,NOW()+INTERVAL '5 minutes')",[tokenHash(employeeSession)]);
+  const employeeCookie='fabi_session='+employeeSession;
+  assert.equal((await fetch(origin+'/factures',{headers:{cookie:employeeCookie},redirect:'manual'})).status,307);
+  assert.equal((await fetch(origin+archived.download_url,{headers:{cookie:employeeCookie}})).status,403);
+  assert.equal((await fetch(origin+'/api/factures',{method:'POST',headers:{cookie:employeeCookie,origin},body:browserForm})).status,403);
   const directTeam=await fetch(origin+'/equipe',{headers:{cookie:directCookie},redirect:'manual'});assert.equal(directTeam.status,307);assert.equal(directTeam.headers.get('location'),'/');
   const humanTeam=await fetch(origin+'/equipe',{headers:{cookie},redirect:'manual'});assert.equal(humanTeam.status,200);assert.match(await humanTeam.text(),/Équipe &amp; accès/);
   const accountsBefore=(await db.query('SELECT count(*)::int n FROM users')).rows[0].n;

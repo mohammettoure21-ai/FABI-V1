@@ -2,6 +2,8 @@
 
 FABI s’utilise désormais dans un navigateur. La version Python/Windows a été remplacée par Next.js (JavaScript) et PostgreSQL. L’ancienne version reste récupérable dans l’historique Git ; ses données locales n’ont pas été supprimées. Aucune migration de SQLite n’a été effectuée.
 
+La rubrique **Factures** permet maintenant d’archiver vos PDF déjà préparés et de les télécharger. Hermes peut aussi y déposer un PDF à votre demande avec son accès dédié. Voir le [guide Factures](docs/FACTURES.md) pour les droits, limites et la mise à jour du connecteur Hermes 2. Aucun encaissement ni dépense n’est créé par cet archivage.
+
 ## Comprendre les trois pièces
 
 - **GitHub** conserve le code et l’historique des modifications.

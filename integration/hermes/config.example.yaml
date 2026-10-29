@@ -20,3 +20,5 @@ mcp_servers:
         - fabi_execute_operation
         - fabi_request_dashboard
         - fabi_open_dashboard
+        - fabi_invoices
+        - fabi_save_invoice

@@ -1,9 +1,13 @@
 // Local MCP stdio bridge. No credentials in tool arguments, responses, URLs or logs.
 import {createInterface} from 'node:readline';
 import {readFile,stat} from 'node:fs/promises';
+import {basename,extname,isAbsolute} from 'node:path';
+import {validateInvoice} from '../lib/invoices.mjs';
 const string={type:'string'},integer={type:'integer'};
 const schema=(properties,required=[])=>({type:'object',properties,required,additionalProperties:false});
 const tools=[
+ {name:'fabi_invoices',description:'Retrouver les factures PDF archivées. Permission dashboard:direct nécessaire. Lecture seule, sans effet comptable.',inputSchema:schema({q:string,property_id:integer,page:integer}),method:'GET',path:'invoices'},
+ {name:'fabi_save_invoice',description:'Archiver un PDF déjà préparé sur la machine Hermes (2 Mo maximum), uniquement à la demande du propriétaire vérifié. Montrer le nom et les associations avant son accord. confirmed:true atteste cet accord. local_path est un chemin absolu du PDF local, jamais un fichier de clé ou de session. Le connecteur transfère le PDF sans afficher son contenu. Aucun revenu ni paiement créé. Les doublons sont conservés une seule fois.',inputSchema:schema({local_path:string,title:string,reference:string,issued_on:{type:'string',format:'date'},property_id:{type:['integer','null']},client_id:{type:['integer','null']},notes:string,confirmed:{type:'boolean',const:true}},['local_path','title','confirmed']),method:'POST',path:'invoices'},
  {name:'fabi_properties',description:'Consulter les appartements gérés. Lecture sans effet métier.',inputSchema:schema({}),method:'GET',path:'properties'},
  {name:'fabi_reservations',description:'Consulter les séjours sur une période [from,to[ en dates ISO exactes.',inputSchema:schema({from:string,to:string},['from','to']),method:'GET',path:'reservations'},
  {name:'fabi_availability',description:'Vérifier un appartement géré, sans garantie pour une offre partenaire.',inputSchema:schema({property_id:integer,arrival:string,departure:string},['property_id','arrival','departure']),method:'GET',path:'availability'},
@@ -26,6 +30,15 @@ async function callTool(name,args){
  if(tool.path==='dashboard-session'&&!process.env.FABI_HERMES_BROWSER_STATE_FILE)throw new Error('BROWSER_STATE_FILE_REQUIRED');
  const url=new URL('/api/integration/'+tool.path,base),headers={Authorization:'Bearer '+key};
  const body={...args};
+ if(tool.name==='fabi_save_invoice'){
+  if(body.confirmed!==true)throw new Error('CONFIRMATION_REQUIRED');
+  if(typeof body.local_path!=='string'||!isAbsolute(body.local_path)||extname(body.local_path).toLowerCase()!=='.pdf')throw new Error('LOCAL_PDF_PATH_REQUIRED');
+  const pdfInfo=await stat(body.local_path);if(!pdfInfo.isFile())throw new Error('LOCAL_PDF_PATH_REQUIRED');
+  if(pdfInfo.size>2*1024*1024)throw new Error('PDF_TOO_LARGE');
+  const file=await readFile(body.local_path);if(file.length>2*1024*1024)throw new Error('PDF_TOO_LARGE');
+  body.filename=basename(body.local_path);validateInvoice(body,file);
+  body.pdf_base64=file.toString('base64');delete body.local_path;
+ }
  if(tool.method==='GET')for(const [k,v] of Object.entries(args))url.searchParams.set(k,String(v));else headers['Content-Type']='application/json';
  const response=await fetch(url,{method:tool.method,headers,body:tool.method==='POST'?JSON.stringify(body):undefined,redirect:'error',signal:AbortSignal.timeout(20000)});
  const data=await response.json();if(!response.ok)throw new Error(/^[A-Z_]+$/.test(data.error??'')?data.error:'CRM_UNAVAILABLE');
