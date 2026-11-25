@@ -77,6 +77,18 @@ test('Navigateur : conversations sans retour au formulaire, historique lisible e
   assert.equal(await page.getByRole('article',{name:'Dépense navigateur fictive',exact:true}).count(),1);
   const monthly=page.getByRole('article',{name:'Historique mensuel sans jour',exact:true});assert.match(await monthly.innerText(),/jour non renseigné/);
   assert.equal(await page.locator('.finance-tabs a').count(),2);
+  await monthly.getByRole('link',{name:'Modifier l’opération'}).click();
+  const edit=monthly.locator('form');
+  assert.equal(await edit.getByLabel('Date',{exact:true}).inputValue(),'');
+  assert.equal(await edit.getByLabel('Montant (FCFA)',{exact:true}).inputValue(),'1000');
+  await edit.getByLabel('Montant (FCFA)',{exact:true}).fill('2500');
+  await edit.getByRole('button',{name:'Enregistrer les modifications'}).click();
+  await page.waitForURL(/finances\?.*succes=/);
+  await page.getByText('Écriture modifiée',{exact:true}).waitFor();
+  assert.match(await monthly.innerText(),/2\s*500/);
+  const revised=await db.query("SELECT amount::int AS amount,original_date,reporting_month,payment_status FROM finance_entries WHERE description='Historique mensuel sans jour'");
+  assert.deepEqual(revised.rows,[{amount:2500,original_date:'',reporting_month:10,payment_status:'À payer'}]);
+
   await page.setViewportSize({width:390,height:844});await page.reload();await page.locator('.operation-card').first().waitFor();
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),'La page dépasse la largeur mobile');
   await page.screenshot({path:'/tmp/fabi-ui-finances-mobile.png',fullPage:true});
