@@ -8,6 +8,7 @@ import {requireAdmin} from '../../lib/auth';
 import {transaction} from '../../lib/db.mjs';
 import {integer,text} from '../../lib/security.mjs';
 import {activities,serviceTypes} from '../../lib/finance.mjs';
+import {financeEntryDate} from '../../lib/finance-history.mjs';
 import {financeReturnUrl} from '../../lib/finance-navigation.mjs';
 function refreshFinanceViews(){for(const path of ['/','/finances','/depenses','/passages','/menage','/proprietaire'])revalidatePath(path);}
 
@@ -52,6 +53,50 @@ export async function saveFinanceEntry(form) {
  }catch{redirect(financeReturnUrl(form,{message:'Écriture non enregistrée',error:true}));}
  refreshFinanceViews();
  redirect(financeReturnUrl(form,{fallback:['depense','loyer'].includes(entry.kind)?'/depenses':'/finances',year:entry.year,message:'Écriture enregistrée'}));
+}
+
+export async function updateFinanceEntry(form) {
+ const user=await requireAdmin();
+ const fail=message=>redirect(financeReturnUrl(form,{message,error:true}));
+ try {
+  const id=integer(form.get('entry_id'),1,2147483647);
+  const description=text(form.get('description'),200);
+  if(!description)throw new Error('INVALID');
+  await transaction(async db=>{
+   const {rows:[entry]}=await db.query('SELECT * FROM finance_entries WHERE id=$1 FOR UPDATE',[id]);
+   if(!entry)throw new Error('NOT_FOUND');
+   const linked=entry.reservation_id!=null||(await db.query('SELECT 1 FROM recurring_expense_months WHERE entry_id=$1 LIMIT 1',[id])).rows.length>0;
+   let {property_id:propertyId,activity,original_date:date,reporting_year:year,reporting_month:month}=entry;
+   if(!linked){
+    propertyId=form.get('property_id')?integer(form.get('property_id'),1,2147483647):null;
+    const chosenActivity=text(form.get('activity'),30);
+    if(chosenActivity!==activity&&!(entry.staff_service?serviceTypes:activities).includes(chosenActivity))throw new Error('INVALID');
+    activity=chosenActivity;
+    const chosenDate=text(form.get('date'),10);
+    const previousDate=financeEntryDate(date)?.iso??'';
+    if(chosenDate!==previousDate){
+     if(!chosenDate){date='';}
+     else{
+      if(financeEntryDate(chosenDate)?.iso!==chosenDate)throw new Error('INVALID');
+      date=chosenDate;
+      year=integer(date.slice(0,4),2000,2200);
+      month=Number(date.slice(5,7));
+     }
+    }
+   }
+   const quantity=entry.staff_service?integer(form.get('quantity'),1,100):entry.quantity;
+   const unit=entry.staff_service?integer(form.get('unit_amount'),1):entry.unit_amount;
+   const amount=entry.staff_service?quantity*unit:integer(form.get('amount'),1,Number.MAX_SAFE_INTEGER);
+   await db.query(`UPDATE finance_entries SET property_id=$2,activity=$3,original_date=$4,reporting_year=$5,reporting_month=$6,
+    description=$7,detail=$8,comment=$9,provider=$10,quantity=$11,unit_amount=$12,amount=$13 WHERE id=$1`,
+    [id,propertyId,activity,date,year,month,description,text(form.get('detail'),200),text(form.get('comment'),1000),text(form.get('provider'),120),quantity,entry.staff_service?unit:unit==null?null:amount,amount]);
+   await recordActivity(db,user.id,'Modification écriture financière '+id);
+  });
+ }catch(error){
+  fail(error.message==='NOT_FOUND'?'Cette opération est introuvable.':'Modification impossible. Vérifiez les champs saisis.');
+ }
+ refreshFinanceViews();
+ redirect(financeReturnUrl(form,{message:'Écriture modifiée'}));
 }
 
 export async function saveMonthlyRent(form) {
