@@ -27,6 +27,34 @@ test('Navigateur : conversations sans retour au formulaire, historique lisible e
   await page.goto(origin+'/connexion');await page.getByLabel('Adresse e-mail',{exact:true}).fill('admin@example.test');await page.getByLabel('Mot de passe',{exact:true}).fill('UnMotDePasseFictif123!');
   await page.getByRole('button',{name:/Se connecter/}).click();await page.waitForURL(origin+'/');
   assert.equal(await page.locator('.nav-operations a').count(),2);
+  await page.goto(origin+'/appartements');
+  const apartment=page.locator('.property').filter({hasText:'Appartement de test'});
+  await apartment.getByText('Modifier le propriétaire et la gestion',{exact:true}).click();
+  await apartment.getByLabel('Nom du propriétaire',{exact:true}).fill('Propriétaire de test');
+  await apartment.getByRole('checkbox',{name:'Géré par FABI Conciergerie'}).check();
+  await apartment.getByRole('button',{name:'Enregistrer la gestion'}).click();
+  await page.getByText('Informations de gestion enregistrées',{exact:true}).waitFor();
+  assert.match(await apartment.innerText(),/Propriétaire de test/);
+  assert.match(await apartment.innerText(),/Géré par FABI Conciergerie/);
+  await db.exec("INSERT INTO properties(reference,name,neighborhood,category,bedrooms,nightly,status) VALUES('UI-EXEMPT','Appartement sans commission','Quartier fictif','F2',1,40000,'Disponible')");
+  await page.goto(origin+'/reservations');
+  const reservation=page.locator('#nouvelle-reservation');
+  for(const [property,arrival,departure,commission] of [['Appartement de test','2099-01-01','2099-01-04','15000'],['Appartement sans commission','2099-01-05','2099-01-08','']]){
+   await reservation.locator('select[name=property_id]').selectOption({label:property});
+   await reservation.getByLabel('Arrivée',{exact:true}).fill(arrival);
+   await reservation.getByLabel('Départ',{exact:true}).fill(departure);
+   await reservation.getByLabel('Voyageurs',{exact:true}).fill('2');
+   await reservation.getByLabel('Prix convenu par nuit (FCFA)',{exact:true}).fill('40000');
+   await reservation.getByLabel('Commission FABI (FCFA, facultatif)',{exact:true}).fill(commission);
+   await Promise.all([
+    page.waitForResponse(response=>response.request().method()==='POST'&&new URL(response.url()).pathname==='/reservations'),
+    reservation.getByRole('button',{name:'Enregistrer la réservation',exact:true}).click()
+   ]);
+   await page.getByText('Réservation enregistrée',{exact:true}).waitFor();
+  }
+  const bookings=await db.query("SELECT expected_commission::int AS commission FROM reservations WHERE arrival>='2099-01-01' ORDER BY arrival");
+  assert.deepEqual(bookings.rows,[{commission:15000},{commission:null}]);
+  assert.equal((await db.query("SELECT count(*)::int AS count FROM finance_entries WHERE kind='commission'")).rows[0].count,0);
   await page.goto(origin+'/messages?dest=2#conversation');await page.waitForFunction(()=>document.querySelector('#conversation .conversation-history')?.scrollTop>0);
   assert.equal(await page.locator('.message-compose').getAttribute('open'),null);
   await page.locator('.conversation-list > a').filter({hasText:'Responsable de test'}).click();await page.waitForURL(/dest=3#conversation/);
